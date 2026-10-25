@@ -185,10 +185,19 @@ def cmd_browser(args) -> int:
         return 0
 
     # harvest the conversation currently open in the browser
-    result = browser_source.harvest(port=args.port, conversation=args.conversation or "browser")
+    result = browser_source.harvest(port=args.port, conversation=args.conversation or "")
+    items = result["items"]
+    if not items:
+        print("No messages found — is a conversation open in the browser, and is Chrome on port %d?"
+              % args.port, file=sys.stderr)
+        return 1
+
+    # Prefer the space id the page reported: it keys the raw file the same way
+    # fetch.py does, so the archive stays consistent between sources.
+    space = next((m.get("space") for m in items if m.get("space")), "") or args.conversation or "browser"
     root = accounts.active_root()
-    rows = browser_source.to_raw(result["conversation"], result["items"])
-    added = browser_source.write_conversation(root, result["conversation"], rows)
+    rows = browser_source.to_raw(space, items)
+    added = browser_source.write_conversation(root, space, rows)
     print("harvested %d messages, %d new, written to %s" % (result["count"], added, root / "raw"))
     if added and not args.no_build:
         from . import cli as _self  # same module; keep the subprocess contract

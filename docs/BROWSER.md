@@ -25,22 +25,26 @@ pip install "gchat-archive[browser]"
 
 ### 1. Start Chrome with a debug port
 
-Chrome can only use a profile once, so **quit Chrome first**, then:
-
 ```bash
 gchat-archive browser launch --profile "Profile 21"
 ```
 
-Use the profile directory that holds the account whose chats you want
-(`~/Library/Application Support/Google/Chrome/Profile 21` on macOS,
-`%LOCALAPPDATA%\Google\Chrome\User Data\Profile 21` on Windows,
-`~/.config/google-chrome/Profile 21` on Linux). Or start Chrome yourself:
+**Why a copy:** Chrome 136+ refuses `--remote-debugging-port` on the default
+user-data directory. `browser launch` therefore clones that one profile
+(~200 MB, once) into `<data>/chrome-profile` and starts Chrome from the copy —
+your session cookies come along, so Chat is already signed in. Your normal
+Chrome windows are untouched, and the copy is disposable.
+
+Find the profile name in `chrome://version` (look for *Profile Path*), or list
+the directories:
 
 ```bash
-google-chrome --remote-debugging-port=9222 --profile-directory="Profile 21"
+ls ~/Library/Application\ Support/Google/Chrome/Profile*        # macOS
+ls "$LOCALAPPDATA/Google/Chrome/User Data/Profile*"             # Windows
+ls ~/.config/google-chrome/Profile*                             # Linux
 ```
 
-Sign in if asked, and leave the Chat window open.
+Leave the Chat window open; sign in if a copy ever comes up signed out.
 
 ### 2. Calibrate
 
@@ -78,17 +82,33 @@ content, and writing `raw/<conversation>.jsonl` in the same format the API sourc
 writes. Running it again is idempotent — already-harvested messages are skipped,
 so you can re-run as you scroll further back.
 
+## How it reads the page
+
+Verified against the live client (Oct 2026). Messages are `<c-wiz>` elements and
+the useful data lives in attributes, not the obfuscated class names:
+
+| What | Where |
+|---|---|
+| message id | `data-multiplat-item-id="MSG_LIST/At/<id>"` |
+| timestamp | `data-local-sort-time-msec` (epoch **ms**, so dates are exact) |
+| space id | `data-p='%.@.null,["space/<SPACE_ID>",…]'` |
+| sender | `[aria-label="Message <Sender>"]` inside the row |
+| body | row `innerText`, stripped of the sender header, timestamps, `Add reaction` and `Read by` chrome |
+
+Because the ids and timestamps are real, harvested rows behave exactly like
+API rows: date filters work, and re-harvesting dedupes on the message id.
+
 ## What it does not do (yet)
 
 - **Attachments** — the page's attachment links are not downloaded.
 - **Automatic conversation switching** — v1 harvests the conversation you have
-  open. Calibration lists the conversation panel entries so the next version can
-  walk the list automatically.
-- **Exact timestamps** — the row shows a clock time, not a date, so `createTime`
-  holds what the page displayed. Day boundaries from date separators are not yet
-  reconstructed into full dates.
-- **Message ids** — Google's internal ids are not exposed in the DOM; ids are
-  content hashes, which dedupe correctly but are not the API's ids.
+  open. The list is readable (`[role="listitem"]`, 96 entries on a real account),
+  so walking it automatically is the next step.
+- **Rows without a timestamp** — system rows like "HISTORY IS ON" carry no
+  `data-local-sort-time-msec`, so their `createTime` is empty and date filters
+  skip them.
+- **Reactions and read receipts** — a `+1` chip or "Message viewed by…" can still
+  appear in a body; reactions are not modeled.
 
 For a complete archive, use the API source; use browser mode for a quick
 no-setup copy, or as a fallback if the OAuth flow is blocked in your org.

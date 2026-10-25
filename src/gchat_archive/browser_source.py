@@ -28,16 +28,21 @@ import time
 import urllib.request
 from pathlib import Path
 
+from . import paths
+
 CHAT_URL = "https://chat.google.com/"
 DEFAULT_PORT = 9222
 
 # The harvester runs inside the page: only there is the DOM (and the session).
 HARVEST_JS = r"""
 (() => {
-  const TIME = /^\s*(\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)?)\s*$/;
-  const DAY = /^(today|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}\/\d{2,4}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(,\s*\d{4})?)$/i;
-
-  function deepestScroller() {
+  // Real Chat markup (verified against chat.google.com, Oct 2026):
+  //   <c-wiz data-topic-id=… data-local-sort-time-msec=… data-multiplat-item-id="MSG_LIST/At/<id>"
+  //          data-p='%.@.null,["space/<SPACE_ID>",…]'>
+  //     <… aria-label="Message <Sender>"> … body … </…>
+  // The attributes are stable, unlike the obfuscated class names, so the
+  // extractor keys on those and falls back to row heuristics only if they vanish.
+  const pane = (() => {
     let best = null, bestScore = 0;
     for (const el of document.querySelectorAll('div,main,section')) {
       const st = getComputedStyle(el);
@@ -46,111 +51,82 @@ HARVEST_JS = r"""
       if (score > bestScore && el.clientHeight > 200) { best = el; bestScore = score; }
     }
     return best || document.scrollingElement;
-  }
+  })();
+  if (!pane) return { pane: null, messages: [], count: 0, atTop: true };
 
-  // Message rows: the deepest elements that carry a timestamp of their own.
-  function messageRows(pane) {
-    const out = [];
-    const walker = document.createTreeWalker(pane, NodeFilter.SHOW_ELEMENT);
-    let node = walker.currentNode;
-    while (node) {
-      const direct = [...node.childNodes].some(
-        (n) => n.nodeType === 3 ? TIME.test(n.textContent) : (n.children && n.children.length === 0 && TIME.test(n.textContent || ''))
-      );
-      if (direct && node.innerText && node.innerText.trim().length > 1) out.push(node);
-      node = walker.nextNode();
+  // "Mon 5:44 PM", "Yesterday 11:55 AM", "Today 9:14 AM" — and the same inline
+  // inside a row header.
+  const TIME = /^(?:(?:Today|Yesterday|[A-Z][a-z]{2,8}(?:,?\s+\d{1,2})?)\s+)?\d{1,2}:\d{2}\s?[AP]M$/;
+  const INLINE_STAMP = /^(?:(?:Today|Yesterday|[A-Z][a-z]{2,8}(?:,?\s+\d{1,2})?)\s+)?\d{1,2}:\d{2}\s?[AP]M\s*/;
+  const containers = [...pane.querySelectorAll('c-wiz[data-topic-id]')];
+
+  const cleanBody = (el, sender) => {
+    const blocks = (el.innerText || '').split(/\n{2,}/);
+    const lines = [];
+    for (const block of blocks) {
+      const parts = block.split('\n').map((x) => x.trim()).filter(Boolean);
+      let text = '';
+      const keep = [];
+      for (const part of parts) {
+        if (part === ',' || part === '@' || part === 'Add reaction') continue;
+        if (TIME.test(part)) continue;
+        if (part === sender) continue;
+        if (!text) text = part;
+        else if (/[.!?]$/.test(text)) { keep.push(text); text = part; }
+        else text += (part.startsWith('@') || part.startsWith(',') ? '' : ' ') + part;
+      }
+      if (text) keep.push(text);
+      if (keep.length) lines.push(keep.join('\n'));
     }
-    return out;
-  }
-
-  function labelOf(row) {
-    const cand = row.querySelector('[aria-label]');
-    if (cand && cand.getAttribute('aria-label')) return cand.getAttribute('aria-label');
-    const lines = (row.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
-    return lines[0] || '';
-  }
-
-  const pane = deepestScroller();
-  const rows = pane ? messageRows(pane) : [];
-  const sample = rows.slice(0, 8).map((r) => ({
-    tag: r.tagName.toLowerCase(),
-    cls: (r.className || '').toString().slice(0, 60),
-    text: (r.innerText || '').slice(0, 160).replace(/\n/g, ' | '),
-  }));
-
-  return {
-    url: location.href,
-    title: document.title,
-    pane: pane ? { tag: pane.tagName.toLowerCase(), cls: (pane.className || '').toString().slice(0, 60),
-                   scrollHeight: pane.scrollHeight, clientHeight: pane.clientHeight } : null,
-    rowCount: rows.length,
-    sample,
-    conversations: [...document.querySelectorAll('[role="listitem"], [role="option"], [data-group-id]')]
-      .slice(0, 500).map((e) => (e.innerText || '').split('\n')[0].trim()).filter(Boolean),
-  };
-})()
-"""
-
-# Collect one rendered batch, then ask the page to scroll up.
-COLLECT_JS = r"""
-(() => {
-  const pane = window.__gca_pane || (window.__gca_pane = (() => {
-    let best = null, bestScore = 0;
-    for (const el of document.querySelectorAll('div,main,section')) {
-      const st = getComputedStyle(el);
-      if (!/(auto|scroll)/.test(st.overflowY)) continue;
-      const score = el.scrollHeight - el.clientHeight;
-      if (score > bestScore && el.clientHeight > 200) { best = el; bestScore = score; }
-    }
-    return best || document.scrollingElement;
-  })());
-
-  const TIME = /^\s*(\d{1,2}:\d{2}\s?(?:AM|PM|am|pm)?)\s*$/;
-  const DAY = /^(today|yesterday|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}\/\d{2,4}|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(,\s*\d{4})?)$/i;
-
-  const timeOf = (el) => {
-    for (const n of el.querySelectorAll('*')) {
-      if (n.children.length) continue;
-      const t = (n.textContent || '').trim();
-      if (TIME.test(t)) return t;
-    }
-    return '';
+    let out = lines.join('\n\n').trim();
+    // Headers and receipt chrome that ride along in the row's text.
+    out = out.replace(INLINE_STAMP, '');
+    out = out.replace(/^Edited\s+/, '');
+    out = out.replace(/\s*Message viewed by [^.]*\./g, '');
+    out = out.replace(/\s*Press tab[^.]*\./g, '');
+    out = out.replace(/\s*Add reaction/g, '');
+    if (sender && out.startsWith(sender)) out = out.slice(sender.length).replace(/^[\s,]+/, '');
+    return out.trim();
   };
 
-  // A message row carries exactly one timestamp; anything holding two or more
-  // is a container wrapping several messages. (Checked against innerText, not
-  // with a `* * *` descendant selector: that matches ancestors outside the
-  // element's own subtree and rejected every row.)
-  const rows = [];
-  for (const el of pane.querySelectorAll('*')) {
-    if (!el.innerText || el.innerText.length < 2) continue;
-    if (el.querySelectorAll('*').length > 80) continue;   // too big to be one message
-    const time = timeOf(el);
-    if (!time) continue;
-    const stamps = (el.innerText.match(/\b\d{1,2}:\d{2}\s?(?:AM|PM)?\b/gi) || []).length;
-    if (stamps !== 1) continue;
-    rows.push(el);
-  }
-
-  const seen = new Set();
-  const out = [];
-  for (const el of rows) {
-    const lines = (el.innerText || '').split('\n').map((s) => s.trim()).filter(Boolean);
-    const time = lines.find((l) => TIME.test(l)) || '';
-    const rest = lines.filter((l) => l !== time);
-    if (!rest.length) continue;
-    const sender = rest[0].length <= 60 ? rest[0] : '';
-    const text = (sender ? rest.slice(1) : rest).join('\n');
+  const messages = [];
+  for (const el of containers) {
+    const label = el.querySelector('[aria-label^="Message "]');
+    const sender = (label ? label.getAttribute('aria-label') : '').replace(/^Message\s+/, '').trim();
+    const msec = Number(el.getAttribute('data-local-sort-time-msec') || 0);
+    const item = (el.getAttribute('data-multiplat-item-id') || '').split('/').pop();
+    const spaceMatch = (el.getAttribute('data-p') || '').match(/"space\/([^"]+)"/);
+    const text = cleanBody(el, sender);
     if (!text) continue;
-    const key = sender + '|' + time + '|' + text;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ sender, time, text });
+    messages.push({
+      id: item || el.getAttribute('data-topic-id'),
+      topic: el.getAttribute('data-topic-id') || '',
+      space: spaceMatch ? spaceMatch[1] : '',
+      sender,
+      time: msec ? new Date(msec).toISOString() : '',
+      text,
+    });
   }
-  return { count: out.length, items: out, atTop: pane.scrollTop <= 2 };
+
+  window.__gca_pane = pane;
+  return {
+    pane: { cls: (pane.className || '').toString().slice(0, 40),
+            scrollHeight: pane.scrollHeight, clientHeight: pane.clientHeight,
+            scrollTop: pane.scrollTop },
+    count: messages.length,
+    atTop: pane.scrollTop <= 2,
+    messages,
+    conversations: [...document.querySelectorAll('[role="listitem"]')]
+      .map((e) => (e.innerText || '').split('\n').filter(Boolean)[0] || '')
+      .filter((t) => t && t.length < 80).slice(0, 300),
+  };
 })()
 """
 
+# Backwards-compatible alias: calibration and harvesting read the same report.
+COLLECT_JS = HARVEST_JS
+
+SCROLL_JS = "(() => { const p = window.__gca_pane || null; const el = p || document.querySelector('div[class*=Bl2pUd], div[class*=krjOGe]') || document.scrollingElement; el.scrollBy(0, -Math.max(500, el.clientHeight * 0.85)); return el.scrollTop; })()"
 
 # --- CDP plumbing ----------------------------------------------------------
 
@@ -224,7 +200,16 @@ def attach(port: int = DEFAULT_PORT) -> Tab:
     """Attach to the running Chrome and focus (or open) the Chat tab."""
     browser = CDP(endpoint(port))
     targets = browser.call("Target.getTargets").get("targetInfos", [])
-    chat = next((t for t in targets if "chat.google.com" in (t.get("url") or "")), None)
+    # Only real tabs: the page also registers service-worker and widget targets
+    # whose URLs contain chat.google.com, and attaching to those reads nothing.
+    def is_chat(t):
+        url = t.get("url") or ""
+        return (t.get("type") == "page"
+                and "chat.google.com" in url
+                and "serviceworker" not in url
+                and "widget" not in url)
+
+    chat = next((t for t in targets if is_chat(t)), None)
     if chat is None:
         created = browser.call("Target.createTarget", url=CHAT_URL)
         target_id = created["targetId"]
@@ -235,30 +220,78 @@ def attach(port: int = DEFAULT_PORT) -> Tab:
     return Tab(browser, info["sessionId"])
 
 
-def launch(profile: str | None = None, port: int = DEFAULT_PORT) -> None:
-    """Start Chrome with a debug port, reusing the signed-in profile."""
+def chrome_user_data() -> Path:
+    """Default Chrome user-data directory for this OS."""
     if os.name == "nt":
-        exe = shutil.which("chrome") or r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-    elif sys.platform == "darwin":
-        exe = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-    else:
-        exe = shutil.which("google-chrome") or shutil.which("chromium") or "google-chrome"
-    cmd = [exe, "--remote-debugging-port=%d" % port, CHAT_URL]
+        return Path(os.environ.get("LOCALAPPDATA", "")) / "Google" / "Chrome" / "User Data"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
+    return Path.home() / ".config" / "google-chrome"
+
+
+def chrome_binary() -> str:
+    if os.name == "nt":
+        return shutil.which("chrome") or r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    if sys.platform == "darwin":
+        return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+    return shutil.which("google-chrome") or shutil.which("chromium") or "google-chrome"
+
+
+_PROFILE_SKIP = shutil.ignore_patterns(
+    "Cache*", "Code Cache", "GPUCache", "DawnCache", "GrShaderCache", "ShaderCache",
+    "Service Worker", "Application Cache", "*.tmp", "optimization_guide*", "Safe Browsing*",
+)
+
+
+def copy_profile(profile: str, dest: Path) -> Path:
+    """Clone one Chrome profile into an isolated user-data dir.
+
+    Chrome 136+ refuses ``--remote-debugging-port`` when the default user-data
+    directory is in use, so the only way to both keep the session cookies and
+    open a debug port is to run from a copy.
+    """
+    source = chrome_user_data()
+    src_profile = source / profile
+    if not src_profile.is_dir():
+        raise SystemExit("no such Chrome profile: %s" % src_profile)
+    if dest.exists():
+        shutil.rmtree(dest)
+    (dest / profile).mkdir(parents=True)
+    shutil.copytree(src_profile, dest / profile, ignore=_PROFILE_SKIP, dirs_exist_ok=True)
+    local_state = source / "Local State"
+    if local_state.is_file():
+        shutil.copy2(local_state, dest / "Local State")
+    return dest
+
+
+def launch(profile: str | None = None, port: int = DEFAULT_PORT,
+           profile_copy: Path | None = None) -> None:
+    """Start Chrome on a debug port, reusing the signed-in profile via a copy."""
+    cmd = [chrome_binary(), "--remote-debugging-port=%d" % port,
+           "--no-first-run", "--no-default-browser-check", CHAT_URL]
     if profile:
-        cmd.insert(1, "--profile-directory=%s" % profile)
+        dest = profile_copy or (paths.data_home() / "chrome-profile")
+        print("copying Chrome profile %r to %s (once; ~200 MB)" % (profile, dest))
+        copy_profile(profile, dest)
+        cmd[1:1] = ["--user-data-dir=%s" % dest, "--profile-directory=%s" % profile]
+        print("copied.")
+    else:
+        print("No --profile given: Chrome will open its default profile, which Chrome 136+")
+        print("will not expose a debug port for. Use --profile 'Profile N' instead.")
     print("launching:", " ".join(cmd))
-    print("If Chrome is already running, quit it first (the profile can only be used once).")
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(30):
+    for _ in range(40):
         time.sleep(1)
         try:
             with socket.create_connection(("127.0.0.1", port), timeout=1):
-                print("debug port ready on %d" % port)
+                print("debug port ready on %d — open a conversation, then run:" % port)
+                print("  gchat-archive browser calibrate --port %d" % port)
                 return
         except OSError:
             continue
-    print("Chrome did not expose a debug port — start it manually with --remote-debugging-port=%d" % port,
-          file=sys.stderr)
+    print("Chrome did not expose a debug port on %d. If another Chrome window already used"
+          % port, file=sys.stderr)
+    print("this profile, quit it and retry.", file=sys.stderr)
 
 
 # --- harvesting ------------------------------------------------------------
@@ -268,23 +301,24 @@ def _stable_id(*parts: str) -> str:
 
 
 def to_raw(conversation: str, items: list[dict], me: str = "") -> list[dict]:
-    """Convert harvested DOM rows into the same JSON shape the API source writes."""
+    """Convert harvested messages into the same JSON shape the API source writes."""
     out = []
     for item in items:
         text = (item.get("text") or "").strip()
         if not text:
             continue
         sender = (item.get("sender") or "").strip()
+        space = (item.get("space") or conversation).strip()
+        message_id = (item.get("id") or "").strip() or _stable_id(space, sender, text[:200])
         stamp = item.get("time") or ""
-        msg_id = _stable_id(conversation, sender, stamp, text[:200])
         out.append({
-            "name": "spaces/%s/messages/%s" % (conversation, msg_id),
+            "name": "spaces/%s/messages/%s" % (space, message_id),
             "text": text,
             "createTime": stamp,
             "lastUpdateTime": stamp,
             "sender": {
                 "displayName": sender or "unknown",
-                "email": me if sender and me and sender.split()[0] in me else "",
+                "email": "",
                 "type": "HUMAN",
             },
             "source": "browser",
@@ -327,24 +361,24 @@ def calibrate(port: int = DEFAULT_PORT) -> dict:
         tab.close()
 
 
-def harvest(port: int = DEFAULT_PORT, conversation: str = "browser", max_rounds: int = 400) -> dict:
-    """Scroll the open conversation and collect every rendered message."""
+def harvest(port: int = DEFAULT_PORT, conversation: str = "browser",
+            max_rounds: int = 600, pause: float = 0.8) -> dict:
+    """Scroll the open conversation upward and collect every rendered message."""
     tab = attach(port)
-    collected: list[dict] = []
-    seen: set[str] = set()
-    for _ in range(max_rounds):
-        batch = tab.js(COLLECT_JS) or {}
-        fresh = 0
-        for item in batch.get("items", []):
-            key = (item.get("sender", ""), item.get("time", ""), item.get("text", ""))
-            if key in seen:
-                continue
-            seen.add(key)
-            collected.append(item)
-            fresh += 1
-        tab.js("(() => { const p = window.__gca_pane; if (p) p.scrollBy(0, -Math.max(400, p.clientHeight * 0.8)); return p.scrollTop; })()")
-        time.sleep(0.9)
-        if batch.get("atTop") and fresh == 0:
-            break
-    tab.close()
-    return {"conversation": conversation, "count": len(collected), "items": collected}
+    seen: dict[str, dict] = {}
+    rounds = 0
+    try:
+        for rounds in range(1, max_rounds + 1):
+            report = tab.js(HARVEST_JS) or {}
+            for message in report.get("messages", []):
+                key = message.get("id") or "%s|%s" % (message.get("time"), message.get("text", "")[:120])
+                seen.setdefault(key, message)
+            if report.get("atTop") or not report.get("pane"):
+                break
+            tab.js(SCROLL_JS)
+            time.sleep(pause)
+    finally:
+        tab.close()
+    items = list(seen.values())
+    items.sort(key=lambda m: m.get("time") or "")
+    return {"conversation": conversation, "count": len(items), "items": items, "rounds": rounds}
