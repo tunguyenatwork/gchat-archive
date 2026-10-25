@@ -165,6 +165,38 @@ def cmd_schedule(args) -> int:
     return 0 if ok else 1
 
 
+def cmd_browser(args) -> int:
+    from . import accounts, browser_source
+
+    if args.action == "launch":
+        browser_source.launch(profile=args.profile, port=args.port)
+        return 0
+
+    if args.action == "calibrate":
+        report = browser_source.calibrate(port=args.port)
+        out = paths.data_home() / "browser_report.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(report, indent=2))
+        print(json.dumps(report, indent=2)[:2500])
+        print("\nfull report: %s" % out)
+        if not report or not report.get("pane"):
+            print("\nNo message pane found — open a conversation in Chat, then re-run.", file=sys.stderr)
+            return 1
+        return 0
+
+    # harvest the conversation currently open in the browser
+    result = browser_source.harvest(port=args.port, conversation=args.conversation or "browser")
+    root = accounts.active_root()
+    rows = browser_source.to_raw(result["conversation"], result["items"])
+    added = browser_source.write_conversation(root, result["conversation"], rows)
+    print("harvested %d messages, %d new, written to %s" % (result["count"], added, root / "raw"))
+    if added and not args.no_build:
+        from . import cli as _self  # same module; keep the subprocess contract
+
+        return _run("build")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     from . import accounts
     print("python      :", sys.version.split()[0])
@@ -237,6 +269,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=["status", "set", "pause", "resume"])
     p.add_argument("expr", nargs="?", help="cron time, e.g. '0 5 * * *'")
     p.set_defaults(func=cmd_schedule)
+
+    p = sub.add_parser("browser", help="harvest Chat through your signed-in Chrome (no OAuth)")
+    p.add_argument("action", choices=["launch", "calibrate", "harvest"])
+    p.add_argument("--port", type=int, default=9222, help="Chrome debug port")
+    p.add_argument("--profile", help="Chrome profile directory, e.g. 'Profile 21' (with launch)")
+    p.add_argument("--conversation", help="archive name for the harvested conversation")
+    p.add_argument("--no-build", action="store_true")
+    p.set_defaults(func=cmd_browser)
 
     p = sub.add_parser("doctor", help="check the local install")
     p.set_defaults(func=cmd_doctor)

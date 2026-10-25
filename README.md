@@ -13,6 +13,16 @@ Google Chat has no export button. This gives you one:
 
 macOS · Windows · Linux.
 
+Two ways to collect, one archive:
+
+| | **API source** (default) | **Browser source** (no setup) |
+|---|---|---|
+| Requires | Google Cloud OAuth client, ~5 min | only your signed-in Chrome |
+| Gets | everything incl. attachments + document text | rendered messages |
+| Stability | stable API | depends on Google's markup |
+
+See [docs/BROWSER.md](docs/BROWSER.md) for the browser source.
+
 ---
 
 ## Install
@@ -86,6 +96,9 @@ gchat-archive serve      # http://127.0.0.1:8765
 | `gchat-archive schedule set "0 5 * * *"` | Install the nightly sync (cron on macOS/Linux, Task Scheduler on Windows) |
 | `gchat-archive schedule pause\|resume\|status` | Inspect or pause the schedule |
 | `gchat-archive doctor` | Check the install: paths, token, optional parsers |
+| `gchat-archive browser launch` | Start Chrome with a debug port on your existing profile |
+| `gchat-archive browser calibrate` | Check that the page markup is understood |
+| `gchat-archive browser harvest --conversation NAME` | Harvest the open conversation, no OAuth |
 
 `--data-dir PATH` (or `GCHAT_ARCHIVE_HOME`) moves the archive anywhere.
 
@@ -134,6 +147,24 @@ Everything stays on your machine. The only network traffic is to Google's APIs.
 - `client_secret.json`, tokens and the archive are in `.gitignore` — never commit them
 
 ---
+
+## Browser source (no OAuth)
+
+```bash
+pip install "gchat-archive[browser]"
+# quit Chrome, then:
+gchat-archive browser launch --profile "Profile 21"
+gchat-archive browser calibrate                 # open a conversation first
+gchat-archive browser harvest --conversation "project-room"
+gchat-archive build && gchat-archive serve
+```
+
+It drives your signed-in Chrome over the DevTools protocol, scrolls the open
+conversation, and writes the same `raw/*.jsonl` the API source writes. No Google
+Cloud project, no scopes, no token. Experimental: it depends on the rendered DOM,
+which is why `calibrate` exists — it reports whether the current markup is
+understood. Attachments are not collected in this mode. Details and limits:
+[docs/BROWSER.md](docs/BROWSER.md).
 
 ## Development
 

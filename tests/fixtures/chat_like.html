@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Fixture chat</title>
+<style>
+  body { margin:0; font:14px system-ui; display:flex; height:100vh; }
+  #list { width:220px; border-right:1px solid #ccc; }
+  #list div[role="listitem"] { padding:8px; border-bottom:1px solid #eee; }
+  #pane { flex:1; overflow-y:auto; padding:12px; }
+  .row { padding:8px 0; border-bottom:1px solid #f0f0f0; }
+  .who { font-weight:600; }
+  .when { color:#666; font-size:11px; }
+</style></head>
+<body>
+  <div id="list">
+    <div role="listitem">Project Room</div>
+    <div role="listitem">Dana Reed</div>
+    <div role="listitem">Build bot</div>
+  </div>
+  <div id="pane"></div>
+  <script>
+    // A chat-shaped DOM: rows with a sender, a time on its own line, and text.
+    const messages = [
+      ["Dana Reed", "9:14 AM", "Kickoff for the contractor onboarding"],
+      ["Dana Reed", "9:15 AM", "Agenda is in the pinned doc"],
+      ["Tu Nguyen", "9:20 AM", "Thanks — reviewing now"],
+      ["Dana Reed", "9:31 AM", "One more note about the deadline"],
+    ];
+    const pane = document.getElementById("pane");
+    for (const [who, when, text] of messages) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.innerHTML =
+        '<div class="who">' + who + '</div>' +
+        '<div class="when">' + when + '</div>' +
+        '<div class="text">' + text + '</div>';
+      pane.appendChild(row);
+    }
+    // enough height to make the pane scrollable
+    const spacer = document.createElement("div");
+    spacer.style.height = "1200px";
+    pane.insertBefore(spacer, pane.firstChild);
+  </script>
+</body></html>
