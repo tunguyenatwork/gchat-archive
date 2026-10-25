@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Archive · sign in</title>
+<link rel="stylesheet" href="/styles.css">
+<script>
+  try {
+    var t = localStorage.getItem("chatArchiveTheme");
+    if (t) document.documentElement.dataset.theme = t;
+  } catch (e) {}
+</script>
+<style>
+  body { display: grid; place-items: center; min-height: 100dvh; padding: 24px; }
+  .card {
+    width: min(380px, 100%);
+    background: var(--bg-soft, #14171d);
+    border: 1px solid var(--line, #262b35);
+    border-radius: var(--radius, 10px);
+    padding: 26px 24px;
+    box-shadow: var(--shadow-modal, 0 30px 70px rgba(0,0,0,.6));
+  }
+  .card h1 { font-size: 17px; margin: 0 0 4px; }
+  .card p.sub { margin: 0 0 20px; font-size: 12.5px; color: var(--fg-faint, #8b93a1); }
+  label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint, #8b93a1); margin-bottom: 6px; }
+  input[type=password], input[type=email], select {
+    width: 100%; box-sizing: border-box;
+    padding: 11px 12px; margin-bottom: 14px;
+    font: inherit; font-family: var(--font); font-size: 14px;
+    color: var(--fg, #e6e9ef); background: var(--bg-raise, #191d25);
+    border: 1px solid var(--line, #262b35); border-radius: var(--radius-sm, 6px);
+    outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent, #5b9cf8); }
+  button {
+    width: 100%; padding: 11px 14px;
+    font: inherit; font-family: var(--font); font-size: 14px; cursor: pointer;
+    background: var(--accent, #5b9cf8); color: var(--accent-fg, #0b1220);
+    border: 1px solid var(--accent, #5b9cf8); border-radius: var(--radius-sm, 6px);
+  }
+  button:hover { filter: brightness(1.08); }
+  button.ghost {
+    width: auto; background: transparent; color: var(--fg-dim, #9aa3b2);
+    border-color: var(--line, #262b35); font-size: 12.5px; padding: 7px 12px; margin-top: 14px;
+  }
+  button.ghost:hover { background: var(--bg-hover, #1e232c); border-color: var(--border-hover, #33405a); }
+  .msg { font-size: 12.5px; margin: 0 0 14px; min-height: 18px; }
+  .msg.err { color: var(--danger, #ff8b8b); }
+  .msg.ok { color: var(--fg-dim, #9aa3b2); }
+  .hidden { display: none !important; }
+  .row { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Chat Archive</h1>
+  <p class="sub" id="subtitle">Enter your password to continue.</p>
+
+  <form id="login-form">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" required autofocus>
+    <p class="msg" id="msg"></p>
+    <button type="submit">Unlock</button>
+  </form>
+
+  <div id="setup-form" class="hidden">
+    <p class="sub">No password is set yet. Choose one — it will be required from now on.</p>
+    <label for="new-password">New password</label>
+    <input id="new-password" type="password" autocomplete="new-password" minlength="8">
+    <label for="new-password2">Repeat</label>
+    <input id="new-password2" type="password" autocomplete="new-password" minlength="8">
+    <p class="msg" id="setup-msg"></p>
+    <button type="button" id="setup-btn">Set password</button>
+  </div>
+
+  <div class="row">
+    <button class="ghost" id="forgot">Forgot password?</button>
+  </div>
+
+  <div id="reset-form" class="hidden" style="margin-top:14px">
+    <p class="sub">A one-time password is emailed to one of your linked accounts.</p>
+    <label for="reset-account">Send to</label>
+    <select id="reset-account"></select>
+    <p class="msg" id="reset-msg"></p>
+    <button id="reset-send">Email temporary password</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const msg = (el, text, kind) => { el.textContent = text; el.className = "msg " + (kind || ""); };
+
+  async function postJSON(url, payload) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+    return data;
+  }
+
+  async function boot() {
+    const status = await fetch("/api/auth/status").then((r) => r.json());
+    if (!status.configured) {
+      $("#login-form").classList.add("hidden");
+      $("#forgot").classList.add("hidden");
+      $("#setup-form").classList.remove("hidden");
+      $("#subtitle").textContent = "Set a password to protect this archive.";
+      return;
+    }
+    if (status.authed) { location.replace("/"); return; }
+    if (status.reset_pending) {
+      $("#subtitle").textContent = "A temporary password was emailed to " + status.reset_pending + ".";
+    }
+  }
+
+  $("#login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const box = $("#msg");
+    try {
+      await postJSON("/api/login", { password: $("#password").value });
+      box.textContent = "Unlocked — loading…"; box.className = "msg ok";
+      location.replace("/");
+    } catch (err) {
+      msg(box, err.message, "err");
+      $("#password").select();
+    }
+  });
+
+  $("#setup-inner") && $("#setup-inner").addEventListener("submit", (e) => e.preventDefault());
+  $("#setup-btn").addEventListener("click", async () => {
+    const box = $("#setup-msg");
+    const a = $("#new-password").value, b = $("#new-password2").value;
+    if (a.length < 8) return msg(box, "Use at least 8 characters.", "err");
+    if (a !== b) return msg(box, "The two entries do not match.", "err");
+    try {
+      await postJSON("/api/auth/setup", { password: a });
+      msg(box, "Password set — loading…", "ok");
+      location.replace("/");
+    } catch (err) { msg(box, err.message, "err"); }
+  });
+
+  $("#forgot").addEventListener("click", async () => {
+    const panel = $("#reset-form");
+    panel.classList.toggle("hidden");
+    if (panel.classList.contains("hidden")) return;
+    try {
+      const { accounts } = await fetch("/api/auth/accounts").then((r) => r.json());
+      $("#reset-account").innerHTML = accounts
+        .map((a) => `<option value="${a.email}">${a.email}</option>`)
+        .join("");
+    } catch (err) {
+      msg($("#reset-msg"), "Could not list accounts: " + err.message, "err");
+    }
+  });
+
+  $("#reset-send").addEventListener("click", async () => {
+    const box = $("#reset-msg");
+    msg(box, "Sending…");
+    try {
+      const res = await postJSON("/api/auth/reset", { email: $("#reset-account").value });
+      msg(box, "Sent to " + res.to + ". Check that inbox.", "ok");
+    } catch (err) {
+      msg(box, err.message, "err");
+    }
+  });
+
+  boot();
+})();
+</script>
+</body>
+</html>

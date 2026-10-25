@@ -1,0 +1,29 @@
+# Archive data, tokens and credentials — never commit these
+.gchat-archive/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.jsonl
+client_secret*.json
+token*.json
+auth.json
+accounts.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv*/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.log
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db

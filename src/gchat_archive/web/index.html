@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat Archive</title>
+<link rel="stylesheet" href="/styles.css">
+<script>
+  /* Apply the saved theme before first paint so there is no flash of the wrong palette.
+     Unknown values (e.g. a theme that has since been removed) fall back to dark. */
+  try {
+    var THEMES = ["dark", "apple", "microsoft", "minimalist", "earthy", "corporate", "vibrant", "luxury"];
+    var savedTheme = localStorage.getItem("chatArchiveTheme");
+    if (savedTheme && THEMES.indexOf(savedTheme) !== -1) {
+      document.documentElement.dataset.theme = savedTheme;
+    } else if (savedTheme) {
+      localStorage.removeItem("chatArchiveTheme");
+    }
+  } catch (e) { /* private mode: keep the default */ }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1>Chat Archive</h1>
+        <span id="acct" class="subtle">offline</span>
+      </div>
+    </div>
+
+    <div class="searchbar">
+      <input id="search" type="search" placeholder="Search all messages…  ( / )" autocomplete="off" spellcheck="false">
+      <kbd>⌘K</kbd>
+      <div id="suggest" class="suggest hidden"></div>
+    </div>
+
+    <div class="catbar">
+      <select id="account-filter" class="hidden" title="Which accounts to search"></select>
+    </div>
+
+    <div class="catbar">
+      <select id="category" title="Conversation type">
+        <option value="all">All conversations</option>
+        <option value="SPACE">Spaces</option>
+        <option value="GROUP_CHAT">Group chats</option>
+        <option value="DIRECT_MESSAGE">Direct messages</option>
+        <option value="BOT">Bots</option>
+      </select>
+      <button id="space-select" class="iconbtn" title="Select conversations to delete or exclude" aria-label="Select conversations">☑</button>
+      <select id="attach" title="Filter by attachments">
+        <option value="any">Any message</option>
+        <option value="with">Has attachments</option>
+        <option value="without">No attachments</option>
+      </select>
+    </div>
+
+    <div class="datebar">
+      <input type="date" id="date-from" title="From date" aria-label="From date">
+      <input type="date" id="date-to" title="To date" aria-label="To date">
+      <button id="date-clear" class="dateclear hidden" title="Clear date range">✕</button>
+    </div>
+
+    <div id="spacebar" class="spacebar hidden">
+      <span id="spacecount" class="subtle"></span>
+      <button id="space-exclude">Exclude</button>
+      <button id="space-delete" class="danger" disabled>Delete…</button>
+      <button id="space-delete-all" class="danger">Delete all listed…</button>
+      <button id="space-done">Done</button>
+    </div>
+
+    <div id="spaces" class="space-list"></div>
+
+    <div class="themebar">
+      <label for="theme">Theme</label>
+      <select id="theme">
+        <option value="dark">Dark</option>
+        <option value="apple">Apple</option>
+        <option value="microsoft">Microsoft</option>
+        <option value="minimalist">Modern Minimalist</option>
+        <option value="earthy">Warm &amp; Earthy</option>
+        <option value="corporate">Corporate Trust</option>
+        <option value="vibrant">Vibrant &amp; Playful</option>
+        <option value="luxury">Quiet Luxury</option>
+      </select>
+      <button id="settings-btn" class="iconbtn" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+
+    <footer id="stats" class="subtle"></footer>
+  </aside>
+
+  <main id="main">
+    <header id="conv-head">
+      <div class="title-row">
+        <button id="nav-toggle" class="iconbtn navbtn" title="Conversations" aria-label="Show conversations">☰</button>
+        <h2 id="conv-title">Select a conversation</h2>
+        <span id="conv-badge" class="badge"></span>
+        <button id="act-select" class="iconbtn hidden" title="Select messages to delete">☑</button>
+        <button id="conv-menu" class="iconbtn hidden" title="Conversation actions">⋯</button>
+      </div>
+      <div id="conv-meta" class="subtle"></div>
+      <div id="conv-actions" class="menu hidden">
+        <button id="act-exclude">Exclude from sync</button>
+        <button id="act-range" class="danger">Delete messages by date…</button>
+        <button id="act-delete" class="danger">Delete conversation…</button>
+      </div>
+      <div id="range-panel" class="menu hidden">
+        <div class="range-row">
+          <label>From <input id="range-from" type="date"></label>
+          <label>To <input id="range-to" type="date"></label>
+        </div>
+        <label class="range-scope"><input id="range-all" type="checkbox"> all conversations, not just this one</label>
+        <p id="range-status" class="subtle"></p>
+        <div class="range-actions">
+          <button id="range-count">Count</button>
+          <button id="range-delete" class="danger" disabled>Delete…</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="selbar" class="hidden">
+      <span id="selcount">0 selected</span>
+      <button id="sel-delete" class="danger" disabled>Delete selected</button>
+      <button id="sel-all">Select loaded</button>
+      <button id="sel-cancel">Done</button>
+    </div>
+
+    <div id="pane">
+      <div id="empty" class="empty">
+        <p>Everything in your Google Chat is archived locally.</p>
+        <p class="subtle">Pick a conversation on the left, or press <kbd>/</kbd> to search across every message.</p>
+      </div>
+      <div id="messages"></div>
+      <div id="results" class="hidden"></div>
+    </div>
+  </main>
+</div>
+<div id="scrim" class="scrim"></div>
+<div id="modal" class="modal hidden">
+  <div class="modal-card">
+    <header class="modal-head">
+      <h3 id="modal-title"></h3>
+      <button id="modal-close" class="iconbtn" title="Close">✕</button>
+    </header>
+    <div id="modal-body"></div>
+  </div>
+</div>
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>
