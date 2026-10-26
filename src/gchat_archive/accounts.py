@@ -229,6 +229,8 @@ def add_account(email: str, token_file: Path, label: str | None = None) -> dict:
     dest = TOKENS_DIR / ("%s.json" % slug)
     if Path(token_file).resolve() != dest.resolve():
         shutil.copy2(token_file, dest)
+    # A token carries a refresh token plus the client secret: owner-only.
+    os.chmod(dest, 0o600)
 
     for entry in data["accounts"]:
         if entry["slug"] == slug:
