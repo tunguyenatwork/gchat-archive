@@ -288,6 +288,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Keep a local, searchable copy of your Google Chat history.",
     )
     parser.add_argument("--data-dir", help="where to keep the archive (default ~/.gchat-archive)")
+    from . import __version__
+
+    parser.add_argument("--version", action="version",
+                        version="gchat-archive %s (python %s)" % (__version__, sys.version.split()[0]),
+                        help="print the version and exit")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("sync", help="fetch new messages, attachments and rebuild the database")

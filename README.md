@@ -58,6 +58,10 @@ everything still works — search just won't look inside attachments. Installing
 `pipx install git+https://github.com/tunguyenatwork/gchat-archive.git`, then
 `pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4`.
 
+First time with `pipx`? **[docs/INSTALL.md](https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/INSTALL.md)**
+walks through installing it, checking the result, and removing everything again. Something broken?
+**[docs/TROUBLESHOOTING.md](https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/TROUBLESHOOTING.md)**.
+
 ### From a checkout
 
 ```bash
