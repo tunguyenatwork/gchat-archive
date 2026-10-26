@@ -97,7 +97,8 @@ def _posix_status() -> dict:
     ours = [l for l in lines if MARK in l]
     if not ours:
         return {"installed": False, "expr": "", "paused": False}
-    expr = ours[0].split(MARK)[0].strip()
+    # The line is "<5 cron fields> <command> > /dev/null 2>&1  # marker"
+    expr = " ".join(ours[0].split(MARK)[0].split()[:5])
     return {"installed": True, "expr": expr, "paused": False}
 
 
