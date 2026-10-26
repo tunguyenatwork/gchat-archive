@@ -39,6 +39,7 @@ browser = [
 ]
 dev = [
   "pytest>=8.0,<9",
+  "pyflakes>=3.2,<4",
 ]
 
 [project.scripts]

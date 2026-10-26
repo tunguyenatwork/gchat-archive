@@ -56,6 +56,15 @@ def ATT_TEXT() -> Path:  # noqa: N802
     return ARCHIVE() / "attachments_text.jsonl"
 WEB = Path(__file__).resolve().parent / "web"
 
+# Scopes requested at consent. chat.messages + spaces for the archive, drive for
+# exporting Google Docs/Sheets, gmail.readonly only to learn the account address.
+OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/chat.messages",
+    "https://www.googleapis.com/auth/chat.spaces.readonly",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
+
 MIME = {
     ".html": "text/html; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
@@ -540,11 +549,17 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:  # surfaced in the UI instead of killing the server
                 self._json({"error": "%s: %s" % (type(exc).__name__, exc)}, 500)
             return
-        if path == "/oauth/start":
-            self.serve_oauth_start()
-            return
-        if path == "/oauth/callback":
-            self.serve_oauth_callback()
+        if path in ("/oauth/start", "/oauth/callback"):
+            # Not under route_api's guard: an exception here used to drop the
+            # connection mid-sign-in, which looks like a crash to the user.
+            try:
+                if path == "/oauth/start":
+                    self.serve_oauth_start()
+                else:
+                    self.serve_oauth_callback()
+            except Exception as exc:
+                traceback.print_exc()
+                self.send_error(500, "sign-in failed: %s" % exc)
             return
         if path == "/file":
             try:

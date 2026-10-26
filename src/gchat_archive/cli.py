@@ -7,8 +7,6 @@ import os
 import subprocess
 import sys
 import time
-import urllib.request
-import webbrowser
 from pathlib import Path
 
 from . import paths, schedule
@@ -129,7 +127,7 @@ def cmd_attachments(args) -> int:
 
 
 def cmd_accounts(args) -> int:
-    from . import accounts
+    from . import accounts  # noqa: F811 - late import keeps --data-dir effective
     registry = accounts.ensure()
     if args.action == "list":
         if not registry["accounts"]:
@@ -200,8 +198,6 @@ def cmd_browser(args) -> int:
     added = browser_source.write_conversation(root, space, rows)
     print("harvested %d messages, %d new, written to %s" % (result["count"], added, root / "raw"))
     if added and not args.no_build:
-        from . import cli as _self  # same module; keep the subprocess contract
-
         return _run("build")
     return 0
 
