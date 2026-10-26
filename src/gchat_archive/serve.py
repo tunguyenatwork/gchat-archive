@@ -15,6 +15,7 @@ import os
 import mimetypes
 import re
 import shutil
+import socket
 import sqlite3
 import sys
 import threading
@@ -32,6 +33,7 @@ from . import manage
 from . import backup
 from . import paths
 from . import schedule
+from . import service
 
 def ARCHIVE() -> Path:  # noqa: N802 - kept call-compatible with the old constant
     """Root of the active account's archive (resolved per call)."""
@@ -580,6 +582,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"error": str(exc)}, 500)
         if path == "/api/backup":
             return self.api_backup_download()
+        if path == "/api/service/status":
+            return self._json(service.status())
 
         con = connect()
         try:
@@ -652,6 +656,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_client_secret(body)
         if path == "/api/backup/restore-confirm":
             return self.api_backup_confirm()
+        if path == "/api/service/install":
+            return self.api_service("install")
+        if path == "/api/service/uninstall":
+            return self.api_service("uninstall")
         if path == "/api/settings/schedule":
             return self.api_save_schedule(body)
         if path == "/api/settings/account/activate":
@@ -709,9 +717,31 @@ class Handler(BaseHTTPRequestHandler):
                 "oauth_available": bool(oauth_client()),
                 "client_secret": client_secret_status(),
                 "backup_sizes": backup_sizes(),
+                "service": service.status(),
                 "port": self.server.server_port,
             }
         )
+
+    def api_service(self, action):
+        """Install or remove the login service for this install."""
+        try:
+            if action == "install":
+                occupied = False
+                try:
+                    with socket.create_connection(("127.0.0.1", self.server.server_port), timeout=1):
+                        occupied = True
+                except OSError:
+                    pass
+                ok, detail = service.install(self.server.server_port)
+                note = ""
+                if ok and occupied:
+                    note = ("A server is already answering on this port (probably the one you started "
+                            "by hand) — stop it, or the service will not be able to bind.")
+                return self._json({"ok": ok, "detail": detail, "note": note, "status": service.status()})
+            ok, detail = service.uninstall()
+            return self._json({"ok": ok, "detail": detail, "status": service.status()})
+        except Exception as exc:
+            return self._json({"error": str(exc)}, 500)
 
     def api_backup_download(self):
         """Build the requested backup and stream it to the browser."""

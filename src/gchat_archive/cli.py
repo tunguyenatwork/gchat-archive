@@ -206,6 +206,23 @@ def cmd_browser(args) -> int:
     return 0
 
 
+def cmd_service(args) -> int:
+    from . import service
+
+    if args.action == "status":
+        print(json.dumps(service.status(), indent=2))
+        return 0
+    if args.action == "uninstall":
+        ok, detail = service.uninstall()
+        print(detail)
+        return 0 if ok else 1
+    ok, detail = service.install(args.port)
+    print(detail)
+    if ok:
+        print("The reader will start automatically at login: http://127.0.0.1:%d" % args.port)
+    return 0 if ok else 1
+
+
 def cmd_backup(args) -> int:
     from . import backup
 
@@ -322,6 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--conversation", help="archive name for the harvested conversation")
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=cmd_browser)
+
+    p = sub.add_parser("service", help="run the reader in the background, starting at login")
+    p.add_argument("action", choices=["install", "uninstall", "status"])
+    p.add_argument("--port", type=int, default=8765)
+    p.set_defaults(func=cmd_service)
 
     p = sub.add_parser("backup", help="write a backup you can restore on another machine")
     p.add_argument("--kind", choices=["config", "archive", "full"], default="archive",

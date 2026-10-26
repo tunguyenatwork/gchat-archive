@@ -6,7 +6,10 @@ Google Chat has no export button. This gives you one:
 
 - **Every message** in every conversation, incremental sync that resumes where it stopped
 - **Full-text search** over message bodies, sender names, and the text inside shared documents (PDF, DOCX, XLSX, CSV, Google Docs/Sheets/Slides)
-- **Browsable offline** — a local web UI with conversation list, date filters, attachment previews and download
+- **Browsable offline** — conversation list, date filters, attachment previews and download
+- **Set up in the browser** — upload your OAuth client, sign in, done; no files to place by hand
+- **Backup & restore from the UI** — one `.tar.gz` rebuilds the archive on a new machine
+- **Optionally a background service** — starts at login, restarts if it stops
 - **Yours only** — listens on `127.0.0.1`, never uploads anything, optional password
 - **Multi-account** — several Google accounts, each with an isolated archive
 - **Prune without losing anything upstream** — delete or exclude conversations and messages locally; Google Chat is never modified
@@ -58,26 +61,96 @@ pytest
 
 ---
 
-## Set up Google access (once)
-
-You need your own OAuth client — it is free and takes about five minutes. Full walkthrough with screenshots-free steps: **[docs/SETUP.md](docs/SETUP.md)**.
-
-Short version:
-
-1. <https://console.cloud.google.com/> → create a project
-2. Enable **Google Chat API** and **Google Drive API**
-3. OAuth consent screen → External → add yourself as a test user
-4. Credentials → Create credentials → **OAuth client ID** → **Desktop app**
-5. Either save the downloaded JSON as `~/.gchat-archive/client_secret.json`,
-   or start the app and drop it on the setup page (`/setup`) — the UI validates
-   it, stores it owner-only, and lets you replace it later from Settings.
-
-Then:
+## Set up (in the browser)
 
 ```bash
-gchat-archive login      # opens the Google consent page, stores a token
-gchat-archive sync       # download everything (first run takes a while)
-gchat-archive serve      # http://127.0.0.1:8765
+gchat-archive serve --open           # → http://127.0.0.1:8765
+```
+
+A fresh install opens **`/setup`** by itself:
+
+1. **Create the OAuth client.** The page links every step — new project → enable **Google Chat API**
+   and **Google Drive API** → OAuth consent screen (*External*, add yourself as a test user, four
+   scopes) → **Credentials → Create credentials → OAuth client ID → Desktop app** → **Download JSON**.
+   Free, no billing account, about five minutes.
+2. **Upload that JSON** — drag and drop or click to choose. It is validated: a *web* client is
+   rejected with a hint to recreate it as *Desktop app*, broken JSON is named as such. Stored
+   owner-only at `~/.gchat-archive/client_secret.json`. Replace it any time from
+   Settings → Google accounts.
+3. **Continue to Google sign-in** and pick the account to archive. Add more accounts later from the
+   same panel.
+4. **Sync.** The first run downloads everything (~40 min for a 240k-message archive). Watch it in the
+   UI or run `gchat-archive sync`.
+5. **Set a password** (Settings → Security) if the machine is shared.
+
+Prefer files to clicks? Put the JSON at `~/.gchat-archive/client_secret.json` (or point
+`GCHAT_CLIENT_SECRET` at it) and run `gchat-archive login` — same flow. Full walkthrough with
+troubleshooting: **[docs/SETUP.md](docs/SETUP.md)**.
+
+---
+
+## Move to a new machine
+
+Everything travels in one file.
+
+**Old machine** — Settings → **Backup & restore** → pick a size:
+
+| Kind | Contains | Typical |
+|---|---|---|
+| Settings only | OAuth client, account registry, password hash, rules, sync watermarks | ~40 KB |
+| **Archive + database** | the above + `chats.sqlite` (all messages + search index) | ~150 MB compressed |
+| Everything | the above + `raw/` messages and downloaded attachments | ~3 GB |
+
+**New machine:**
+
+```bash
+pipx install "gchat-archive[text]"
+gchat-archive serve --open
+```
+
+Settings → **Backup & restore** → choose the file. An empty install installs it directly; an existing
+archive asks first (showing the backup's date, kind and message count) and copies the current settings
+to `pre-restore-<timestamp>/`. Reload, enter the same password — history, rules and Google credentials
+are all there, so the next `sync` continues where the old machine stopped.
+
+CLI equivalents:
+
+```bash
+gchat-archive backup --kind archive --out ~/Desktop/gca.tar.gz   # old machine
+gchat-archive restore ~/Desktop/gca.tar.gz                      # new machine
+```
+
+Backups **contain credentials** (client secret, tokens, password hash) — that is what makes a restore
+self-sufficient, so store the file somewhere private.
+
+---
+
+## Run it in the background (optional)
+
+Settings → **Run at login** installs the reader as a per-user service, so the archive is available
+whenever you are logged in:
+
+| Platform | Mechanism | Where |
+|---|---|---|
+| macOS | LaunchAgent (`RunAtLoad`, `KeepAlive`) | `~/Library/LaunchAgents/com.gchat-archive.serve.plist` |
+| Linux | `systemd --user` unit (`Restart=on-failure`) | `~/.config/systemd/user/gchat-archive.service` |
+| Windows | Task Scheduler, at logon | task `gchat-archive serve` |
+
+```bash
+gchat-archive service install [--port 8765]
+gchat-archive service status
+gchat-archive service uninstall
+```
+
+Logs land in `~/.gchat-archive/service.log` and `service.err.log`. Stop a hand-started instance before
+installing, or the service has no port to bind. On Linux, `loginctl enable-linger $USER` keeps it
+running while you are logged out.
+
+The nightly sync is a separate, also-optional schedule:
+
+```bash
+gchat-archive schedule set "0 5 * * *"     # crontab on macOS/Linux, Task Scheduler on Windows
+gchat-archive schedule status
 ```
 
 ---
@@ -86,23 +159,20 @@ gchat-archive serve      # http://127.0.0.1:8765
 
 | Command | What it does |
 |---|---|
-| `gchat-archive login` | Add a Google account (OAuth loopback flow; opens `/setup` until a client is uploaded) |
+| `gchat-archive serve` | Reader UI on <http://127.0.0.1:8765> (`--port`, `--open`) |
+| `gchat-archive login` | Add a Google account (opens `/setup` until a client is uploaded) |
 | `gchat-archive sync` | Fetch new messages → attachments → rebuild the database |
 | `gchat-archive sync --full` | Re-pull every conversation from scratch |
 | `gchat-archive sync --check-all` | Also re-check conversations that look idle (catches edits/deletes) |
-| `gchat-archive serve` | Reader UI on <http://127.0.0.1:8765> (`--port`, `--open`) |
 | `gchat-archive build` | Rebuild `chats.sqlite` from downloaded messages |
-| `gchat-archive attachments download [N]` | Download attachment files |
-| `gchat-archive attachments stats` | What has been downloaded and extracted |
+| `gchat-archive attachments download [N]` / `stats` | Manage attachment files |
 | `gchat-archive accounts list\|use\|remove` | Manage accounts |
-| `gchat-archive schedule set "0 5 * * *"` | Install the nightly sync (cron on macOS/Linux, Task Scheduler on Windows) |
-| `gchat-archive schedule pause\|resume\|status` | Inspect or pause the schedule |
 | `gchat-archive backup [--kind config\|archive\|full]` | Write a restorable `.tar.gz` |
 | `gchat-archive restore FILE [--force]` | Install a backup (config, database, rules) |
+| `gchat-archive service install\|status\|uninstall` | Run the reader at login |
+| `gchat-archive schedule set\|pause\|resume\|status` | Nightly sync |
 | `gchat-archive doctor` | Check the install: paths, token, optional parsers |
-| `gchat-archive browser launch` | Start Chrome with a debug port on your existing profile |
-| `gchat-archive browser calibrate` | Check that the page markup is understood |
-| `gchat-archive browser harvest --conversation NAME` | Harvest the open conversation, no OAuth |
+| `gchat-archive browser launch\|calibrate\|harvest` | Harvest through a signed-in Chrome instead |
 
 `--data-dir PATH` (or `GCHAT_ARCHIVE_HOME`) moves the archive anywhere.
 
@@ -112,9 +182,10 @@ gchat-archive serve      # http://127.0.0.1:8765
 
 ```
 ~/.gchat-archive/
-├── client_secret.json          your OAuth client (never commit)
+├── client_secret.json          your OAuth client (owner-only)
+├── auth.json                   archive password hash (owner-only)
 ├── accounts.json               which accounts exist, which is active
-├── tokens/<slug>.json          OAuth tokens, mode 0600
+├── tokens/<slug>.json          OAuth tokens, owner-only
 └── accounts/<slug>/
     ├── raw/<space>.jsonl       append-only API responses, one JSON per line
     ├── raw/<space>.meta.json   conversation metadata
@@ -126,7 +197,9 @@ gchat-archive serve      # http://127.0.0.1:8765
     └── archive_manage.json     your delete/exclude rules
 ```
 
-The database is **disposable** — it is rebuilt from `raw/` minus `archive_manage.json` on every sync. Deleting a message or conversation in the UI records it in the rules file, so a rebuild cannot resurrect it, and removing the rule brings it back.
+The database is **disposable** — it is rebuilt from `raw/` minus `archive_manage.json` on every sync.
+Deleting a message or conversation in the UI records it in the rules file, so a rebuild cannot
+resurrect it, and removing the rule brings it back.
 
 Everything stays on your machine. The only network traffic is to Google's APIs.
 
@@ -147,30 +220,10 @@ Everything stays on your machine. The only network traffic is to Google's APIs.
 
 - Binds to `127.0.0.1` by default — not reachable from your network
 - Optional password (Settings → Security): PBKDF2 hash, in-memory sessions, password reset by email to the linked account
-- Tokens are stored with owner-only permissions
-- `client_secret.json`, tokens and the archive are in `.gitignore` — never commit them
+- Credentials, tokens and backups are stored owner-only; `.gitignore` keeps them out of git
+- Revoke access any time at <https://myaccount.google.com/permissions>
 
 ---
-
-## Backup and restore
-
-Settings → **Backup & restore** downloads a `.tar.gz`, and the same panel installs
-one on another machine.
-
-| Kind | Contains | Typical size |
-|---|---|---|
-| `config` | OAuth client, account registry, password hash, per-account rules and sync watermarks | ~40 KB |
-| `archive` | the above + `chats.sqlite` (all messages, search index) | ~500 MB |
-| `full` | the above + `raw/` JSONL and downloaded attachments | ~3 GB |
-
-Every backup carries a `manifest.json` (version, counts, kind) and **includes
-credentials** — that is what makes a restore self-sufficient, so store it
-privately. Restoring asks first: it shows the backup's date, kind and message
-count, copies the current settings to `pre-restore-<timestamp>/`, then installs.
-A restore into an empty install (the "new system" case) needs no confirmation.
-
-CLI equivalents: `gchat-archive backup --kind archive --out ~/Desktop/gca.tar.gz`,
-`gchat-archive restore ~/Desktop/gca.tar.gz`.
 
 ## Browser source (no OAuth)
 
@@ -183,21 +236,23 @@ gchat-archive browser harvest --conversation "project-room"
 gchat-archive build && gchat-archive serve
 ```
 
-It drives your signed-in Chrome over the DevTools protocol, scrolls the open
-conversation, and writes the same `raw/*.jsonl` the API source writes. No Google
-Cloud project, no scopes, no token. Experimental: it depends on the rendered DOM,
-which is why `calibrate` exists — it reports whether the current markup is
-understood. Attachments are not collected in this mode. Details and limits:
+It drives your signed-in Chrome over the DevTools protocol, scrolls the open conversation, and writes
+the same `raw/*.jsonl` the API source writes. No Google Cloud project, no scopes, no token.
+Experimental: it depends on the rendered DOM, which is why `calibrate` exists — it reports whether the
+current markup is understood. Attachments are not collected in this mode. Details and limits:
 [docs/BROWSER.md](docs/BROWSER.md).
 
 ## Development
 
 ```bash
 pip install -e ".[text,dev]"
-pytest                     # offline tests: build, FTS search, rules, shrink guard, CLI
+pytest                     # offline: build, FTS, rules, backup/restore, CLI, endpoints
 ```
 
-Layout: `src/gchat_archive/` — `api` (Chat REST), `fetch` (incremental sync), `build` (raw → SQLite/FTS5), `attachments`, `textract`, `manage` (rules), `accounts`, `auth`, `serve` (stdlib HTTP + UI), `schedule`, `cli`. The browser app is plain HTML/CSS/JS in `src/gchat_archive/web/`, no build step.
+Layout: `src/gchat_archive/` — `api` (Chat REST), `fetch` (incremental sync), `build` (raw → SQLite/FTS5), `attachments`, `textract`, `manage` (rules), `accounts`, `auth`, `serve` (stdlib HTTP + UI), `backup`, `service`, `schedule`, `cli`. The browser app is plain HTML/CSS/JS in `src/gchat_archive/web/`, no build step.
+
+Installing from a checkout into another location is a plain reinstall — the UI ships inside the wheel,
+so re-run the install after changing anything under `web/`.
 
 ## License
 

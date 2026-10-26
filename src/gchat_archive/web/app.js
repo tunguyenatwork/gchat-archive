@@ -1574,6 +1574,36 @@
     }
   }
 
+
+  function serviceHTML(svc) {
+    const s = svc || {};
+    const running = !!s.running;
+    return `<section>
+      <h4>Run at login</h4>
+      <p class="sched-note">
+        ${running
+          ? `Installed as a ${esc(s.platform || "service")} entry — it starts with your session and restarts if it stops.`
+          : `Optional: start this reader automatically every time you log in (${esc(s.platform || "system service")}).`}
+        ${s.path ? `<br><span class="subtle">${esc(String(s.path))}</span>` : ""}
+      </p>
+      <div class="sched-row">
+        ${running
+          ? `<button class="linkbtn" id="svc-remove">Remove background service</button>`
+          : `<button class="primary" id="svc-install">Install background service</button>`}
+      </div>
+    </section>`;
+  }
+
+  async function serviceAction(action) {
+    try {
+      const res = await post(`/api/service/${action}`, {});
+      toast(res.note || res.detail || (action === "install" ? "Service installed" : "Service removed"));
+      openSettings();
+    } catch (err) {
+      toast(`Could not ${action} the service: ${err.message}`);
+    }
+  }
+
   async function openSettings() {
     el.modal.classList.remove("hidden");
     el.modalTitle.textContent = "Settings";
@@ -1642,6 +1672,7 @@
         </p>
       </section>
       ${backupHTML(data.backup_sizes)}
+      ${serviceHTML(data.service)}
       <section>
         <h4>Security</h4>
         ${
@@ -1713,6 +1744,11 @@
         }
       });
     });
+
+    const svcInstall = el.modalBody.querySelector("#svc-install");
+    if (svcInstall) svcInstall.addEventListener("click", () => serviceAction("install"));
+    const svcRemove = el.modalBody.querySelector("#svc-remove");
+    if (svcRemove) svcRemove.addEventListener("click", () => serviceAction("uninstall"));
 
     const restoreFile = el.modalBody.querySelector("#restore-file");
     if (restoreFile) restoreFile.addEventListener("change", (e) => uploadBackup(e.target.files[0]));
