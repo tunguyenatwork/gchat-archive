@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import mimetypes
 import re
 import sqlite3
@@ -347,6 +348,43 @@ def oauth_client() -> dict:
     return data.get("installed") or data.get("web") or {}
 
 
+def parse_client_secret(data) -> dict:
+    """Return the installed-app client, or raise ValueError with a fixable reason."""
+    if not isinstance(data, dict):
+        raise ValueError("that file is not a JSON object")
+    if "installed" not in data:
+        if "web" in data:
+            raise ValueError("this is a \"web\" client — recreate it as application type \"Desktop app\"")
+        raise ValueError("no \"installed\" section — download the JSON for an OAuth client of type \"Desktop app\"")
+    client = data["installed"]
+    if not client.get("client_id") or not client.get("client_secret"):
+        raise ValueError("client_id / client_secret are missing from the file")
+    if not str(client.get("client_id", "")).endswith(".apps.googleusercontent.com"):
+        raise ValueError("that client_id does not look like a Google OAuth client")
+    return client
+
+
+def client_secret_status() -> dict:
+    """What the UI shows about the stored OAuth client (never the secret itself)."""
+    path = paths.client_secret()
+    status = {"present": False, "path": str(path), "client_id": "", "project_id": "", "type": ""}
+    if not path.exists():
+        return status
+    try:
+        client = parse_client_secret(json.loads(path.read_text()))
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        status.update({"present": True, "error": str(exc)})
+        return status
+    cid = str(client.get("client_id", ""))
+    status.update({
+        "present": True,
+        "client_id": cid[:12] + "…" + cid[-18:] if len(cid) > 32 else cid,
+        "project_id": client.get("project_id", "") or "",
+        "type": "installed",
+    })
+    return status
+
+
 def redirect_uri(port: int) -> str:
     # Installed-app clients accept a loopback redirect; the port must match the
     # one this server is listening on.
@@ -464,6 +502,8 @@ class Handler(BaseHTTPRequestHandler):
         # as white-on-transparent.
         if path in ("/login", "/login.html"):
             return self.serve_login_page()
+        if path in ("/setup", "/setup.html"):
+            return self.serve_setup_page()
         if path == "/api/auth/status":
             return self.api_auth_status()
         if path == "/api/auth/accounts":
@@ -510,6 +550,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def route_api(self, path):
+        # These must work on a first run, before any archive exists.
+        if path == "/api/oauth/client-secret":
+            return self._json(client_secret_status())
+        if path == "/api/settings":
+            return self.api_settings(None)
+
         con = connect()
         try:
             if path == "/api/meta":
@@ -526,8 +572,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self.api_context(con)
             if path == "/api/attachments":
                 return self.api_attachments(con)
-            if path == "/api/settings":
-                return self.api_settings(con)
             if path == "/api/auth/state":
                 return self.api_auth_state()
             self._json({"error": "unknown endpoint"}, 404)
@@ -569,6 +613,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_messages_delete(body)
         if path == "/api/attachment/delete":
             return self.api_attachment_delete(body)
+        if path == "/api/oauth/client-secret":
+            return self.api_client_secret(body)
         if path == "/api/settings/schedule":
             return self.api_save_schedule(body)
         if path == "/api/settings/account/activate":
@@ -624,9 +670,43 @@ class Handler(BaseHTTPRequestHandler):
                 },
                 "schedule": schedule.status(),
                 "oauth_available": bool(oauth_client()),
+                "client_secret": client_secret_status(),
                 "port": self.server.server_port,
             }
         )
+
+    def api_client_secret(self, body):
+        """Store (or replace, or remove) the OAuth client JSON uploaded from the UI."""
+        if body.get("remove"):
+            try:
+                paths.client_secret().unlink()
+            except FileNotFoundError:
+                pass
+            return self._json({"ok": True, "removed": True, **client_secret_status()})
+
+        raw = body.get("json")
+        if isinstance(raw, dict):
+            data = raw
+        elif isinstance(raw, str) and raw.strip():
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                return self._json({"error": "that file is not valid JSON (%s)" % exc}, 400)
+        else:
+            return self._json({"error": "no file contents received"}, 400)
+
+        try:
+            parse_client_secret(data)
+        except ValueError as exc:
+            return self._json({"error": str(exc)}, 400)
+
+        path = paths.client_secret()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(data, indent=2))
+        os.chmod(tmp, 0o600)
+        tmp.replace(path)
+        return self._json({"ok": True, **client_secret_status()})
 
     def api_save_schedule(self, body):
         expr = (body.get("expr") or "").strip()
@@ -664,8 +744,7 @@ class Handler(BaseHTTPRequestHandler):
     def serve_oauth_start(self):
         client = oauth_client()
         if not client:
-            self.send_error(500, "no OAuth client configured")
-            return
+            return self.serve_setup_page()
         params = {
             "client_id": client["client_id"],
             "redirect_uri": redirect_uri(self.server.server_port),
@@ -679,6 +758,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(302)
         self.send_header("Location", url)
         self.end_headers()
+
+    def serve_setup_page(self):
+        """First run: upload client_secret.json, then continue to Google sign-in."""
+        return self.serve_file(WEB / "setup.html", "text/html; charset=utf-8")
 
     def serve_oauth_callback(self):
         query = self.server.query
@@ -715,6 +798,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     # --- auth -------------------------------------------------------------
+    def serve_file(self, path: Path, content_type: str):
+        try:
+            body = path.read_bytes()
+        except OSError:
+            self.send_error(404, "not found")
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def serve_login_page(self):
         body = (WEB / "login.html").read_bytes()
         self.send_response(200)

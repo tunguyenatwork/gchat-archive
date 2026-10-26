@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Google · Chat Archive</title>
+<link rel="stylesheet" href="/styles.css">
+<script>
+  try { const t = localStorage.getItem("chat-archive-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  body { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+  .card { width: 100%; max-width: 620px; background: var(--bg-soft, #14171d); border: 1px solid var(--line, #262b35);
+          border-radius: var(--radius, 10px); padding: 26px 28px; box-shadow: var(--shadow-modal, 0 30px 70px rgba(0,0,0,.6)); }
+  h1 { font-size: 18px; margin: 0 0 4px; color: var(--fg, #e6e9ef); }
+  .sub { color: var(--fg-faint, #8b93a1); font-size: 13px; margin: 0 0 20px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-dim, #9aa3b2); margin: 22px 0 10px; }
+  .drop { border: 1.5px dashed var(--border-hover, #33405a); border-radius: var(--radius-sm, 6px); padding: 22px;
+          text-align: center; color: var(--fg-dim, #9aa3b2); cursor: pointer; transition: border-color .15s, background .15s; }
+  .drop.hot { border-color: var(--accent, #5b9cf8); background: var(--bg-hover, #1e232c); }
+  .drop strong { color: var(--fg, #e6e9ef); display: block; margin-bottom: 4px; font-size: 14px; }
+  .drop input { display: none; }
+  .status { font-size: 13px; margin-top: 12px; }
+  .status.ok { color: var(--accent, #5b9cf8); }
+  .status.err { color: var(--danger, #ff8b8b); }
+  .id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--fg-faint, #8b93a1); }
+  ol { padding-left: 20px; margin: 0; color: var(--fg-dim, #9aa3b2); font-size: 13px; line-height: 1.7; }
+  ol li { margin-bottom: 6px; }
+  ol code { background: var(--bg-raise, #191d25); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  a { color: var(--accent, #5b9cf8); }
+  .btn { display: inline-block; margin-top: 18px; padding: 10px 16px; border-radius: var(--radius-sm, 6px);
+         background: var(--accent, #5b9cf8); color: var(--accent-fg, #0b1220); font-weight: 600; font-size: 13px;
+         text-decoration: none; border: 0; cursor: pointer; }
+  .btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+  .btn.ghost { background: transparent; color: var(--fg, #e6e9ef); border: 1px solid var(--line, #262b35); font-weight: 500; margin-left: 8px; }
+  .foot { margin-top: 18px; font-size: 12px; color: var(--fg-faint, #8b93a1); }
+  .foot a { color: var(--fg-dim, #9aa3b2); }
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Connect Google</h1>
+  <p class="sub">The archive talks to Google Chat with your own OAuth client. Upload it once — it stays on this machine.</p>
+
+  <h2>1 · Upload <code>client_secret.json</code></h2>
+  <label class="drop" id="drop">
+    <input type="file" id="file" accept=".json,application/json">
+    <strong>Drop the file here, or click to choose</strong>
+    client_secret_*.json — OAuth client of type “Desktop app”
+  </label>
+  <p class="status" id="status"></p>
+  <p class="id" id="client-id"></p>
+
+  <h2 id="howto">2 · How to get the file</h2>
+  <ol>
+    <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">Google Cloud Console</a> → create a project (any name).</li>
+    <li>Enable both APIs in <a href="https://console.cloud.google.com/apis/library/chat.googleapis.com" target="_blank" rel="noreferrer">Google Chat API</a> and
+        <a href="https://console.cloud.google.com/apis/library/drive.googleapis.com" target="_blank" rel="noreferrer">Google Drive API</a>.</li>
+    <li><a href="https://console.cloud.google.com/apis/credentials/consent" target="_blank" rel="noreferrer">OAuth consent screen</a> → <em>External</em> → add your own address under
+        <em>Test users</em> → save. Add the scopes <code>chat.messages</code>, <code>chat.spaces.readonly</code>, <code>drive</code>, <code>gmail.readonly</code>.</li>
+    <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer">Credentials</a> → <em>Create credentials</em> →
+        <em>OAuth client ID</em> → application type <strong>Desktop app</strong> → create.</li>
+    <li>Click <em>Download JSON</em> and upload that file here.</li>
+  </ol>
+  <p class="foot">Free, no billing account. In “Testing” mode Google expires the token after 7 days — re-run sign-in then, or publish the app.</p>
+
+  <a class="btn" id="go" href="/oauth/start" aria-disabled="true">Continue to Google sign-in</a>
+  <a class="btn ghost" href="/">Back to the archive</a>
+</main>
+
+<script>
+  const $ = (s) => document.querySelector(s);
+  const statusEl = $("#status");
+  const idEl = $("#client-id");
+  const go = $("#go");
+
+  function setStatus(text, kind = "") {
+    statusEl.className = "status " + kind;
+    statusEl.textContent = text;
+  }
+
+  function showConfigured(data) {
+    setStatus("Client configured.", "ok");
+    idEl.textContent = data.client_id ? `Client ID: ${data.client_id}${data.project_id ? " · project " + data.project_id : ""}` : "";
+    go.setAttribute("aria-disabled", "false");
+  }
+
+  async function refresh() {
+    try {
+      const res = await fetch("/api/oauth/client-secret");
+      const data = await res.json();
+      if (data.present && !data.error) showConfigured(data);
+      else if (data.present && data.error) setStatus(`Stored file is unusable: ${data.error}`, "err");
+      else setStatus("No client uploaded yet.", "");
+    } catch (err) {
+      setStatus(`Could not read status: ${err.message}`, "err");
+    }
+  }
+
+  async function upload(file) {
+    if (!file) return;
+    setStatus(`Reading ${file.name}…`);
+    let text;
+    try {
+      text = await file.text();
+    } catch (err) {
+      setStatus(`Could not read the file: ${err.message}`, "err");
+      return;
+    }
+    try {
+      const res = await fetch("/api/oauth/client-secret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: text }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus(data.error || "Upload rejected.", "err");
+        return;
+      }
+      showConfigured(data);
+      setStatus("Saved. Continue to sign in.", "ok");
+    } catch (err) {
+      setStatus(`Upload failed: ${err.message}`, "err");
+    }
+  }
+
+  const drop = $("#drop");
+  $("#file").addEventListener("change", (e) => upload(e.target.files[0]));
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("hot"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("hot"); }));
+  drop.addEventListener("drop", (e) => upload(e.dataTransfer.files[0]));
+
+  refresh();
+</script>
+</body>
+</html>

@@ -1447,6 +1447,51 @@
     return { freq: "daily", time: `${pad(parseInt(h, 10) || 0)}:${pad(parseInt(m, 10) || 0)}` };
   }
 
+
+  function oauthHTML(data) {
+    const cs = data.client_secret || {};
+    if (cs.present && !cs.error) {
+      return `<div class="cs-box">
+        <div class="cs-row">
+          <span class="cs-dot ok"></span>
+          <span>OAuth client: <code>${esc(cs.client_id || "stored")}</code>${cs.project_id ? ` · <span class="subtle">project ${esc(cs.project_id)}</span>` : ""}</span>
+        </div>
+        <div class="cs-actions">
+          <label class="linkbtn">Replace client_secret.json<input type="file" id="cs-file" accept=".json,application/json" hidden></label>
+          <a class="linkbtn" href="/setup#howto" target="_blank" rel="noreferrer">How to get this file</a>
+        </div>
+      </div>`;
+    }
+    if (cs.present && cs.error) {
+      return `<div class="cs-box warn">
+        <div class="cs-row"><span class="cs-dot bad"></span><span>Stored OAuth client is unusable: ${esc(cs.error)}</span></div>
+        <div class="cs-actions">
+          <label class="linkbtn">Upload a new client_secret.json<input type="file" id="cs-file" accept=".json,application/json" hidden></label>
+          <a class="linkbtn" href="/setup#howto" target="_blank" rel="noreferrer">How to get this file</a>
+        </div>
+      </div>`;
+    }
+    return `<div class="cs-box warn">
+      <div class="cs-row"><span class="cs-dot bad"></span><span>No OAuth client yet — Google sign-in is unavailable.</span></div>
+      <div class="cs-actions">
+        <label class="linkbtn">Upload client_secret.json<input type="file" id="cs-file" accept=".json,application/json" hidden></label>
+        <a class="linkbtn" href="/setup" target="_blank" rel="noreferrer">Step-by-step instructions</a>
+      </div>
+    </div>`;
+  }
+
+  async function uploadClientSecret(file) {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const res = await post("/api/oauth/client-secret", { json: text });
+      toast(res.ok ? "OAuth client saved — you can add a Google account now" : "Saved");
+      openSettings();
+    } catch (err) {
+      toast(`Upload rejected: ${err.message}`);
+    }
+  }
+
   async function openSettings() {
     el.modal.classList.remove("hidden");
     el.modalTitle.textContent = "Settings";
@@ -1486,11 +1531,12 @@
       <section>
         <h4>Google accounts</h4>
         ${accountsHTML}
+        ${oauthHTML(data)}
         ${
           data.oauth_available
             ? `<a class="add-acct" href="/oauth/start">+ Add Google account…</a>
                <p class="sched-note">Opens Google sign-in. The browser you sign in with decides which account is added.</p>`
-            : `<p class="sched-note">No OAuth client secret found — cannot add accounts from here.</p>`
+            : ""
         }
       </section>
       <section>
@@ -1584,6 +1630,9 @@
         }
       });
     });
+
+    const csFile = el.modalBody.querySelector("#cs-file");
+    if (csFile) csFile.addEventListener("change", (e) => uploadClientSecret(e.target.files[0]));
 
     const pwSave = el.modalBody.querySelector("#pw-save");
     if (pwSave) {

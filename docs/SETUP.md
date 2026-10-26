@@ -80,6 +80,17 @@ export GCHAT_CLIENT_SECRET=/path/to/client_secret.json        # macOS/Linux
 setx  GCHAT_CLIENT_SECRET "C:\path\to\client_secret.json"     # Windows
 ```
 
+## 4b. Or upload it in the app
+
+You do not have to place the file by hand. Start the archive and open
+<http://127.0.0.1:8765/setup> (it opens automatically on a first run):
+
+- drop `client_secret.json` onto the page, or click to choose it
+- the file is validated (a `web` client is rejected with a hint to recreate it as
+  *Desktop app*), stored owner-only at `~/.gchat-archive/client_secret.json`
+- **Settings → Google accounts** shows which client is in use and lets you
+  replace it later, e.g. after rotating a client secret
+
 ## 5. Sign in
 
 ```bash

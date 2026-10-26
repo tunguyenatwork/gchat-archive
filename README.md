@@ -68,7 +68,9 @@ Short version:
 2. Enable **Google Chat API** and **Google Drive API**
 3. OAuth consent screen → External → add yourself as a test user
 4. Credentials → Create credentials → **OAuth client ID** → **Desktop app**
-5. Save the downloaded JSON as `~/.gchat-archive/client_secret.json`
+5. Either save the downloaded JSON as `~/.gchat-archive/client_secret.json`,
+   or start the app and drop it on the setup page (`/setup`) — the UI validates
+   it, stores it owner-only, and lets you replace it later from Settings.
 
 Then:
 
@@ -84,7 +86,7 @@ gchat-archive serve      # http://127.0.0.1:8765
 
 | Command | What it does |
 |---|---|
-| `gchat-archive login` | Add a Google account (OAuth loopback flow) |
+| `gchat-archive login` | Add a Google account (OAuth loopback flow; opens `/setup` until a client is uploaded) |
 | `gchat-archive sync` | Fetch new messages → attachments → rebuild the database |
 | `gchat-archive sync --full` | Re-pull every conversation from scratch |
 | `gchat-archive sync --check-all` | Also re-check conversations that look idle (catches edits/deletes) |
