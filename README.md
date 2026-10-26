@@ -37,22 +37,32 @@ See [docs/BROWSER.md](docs/BROWSER.md) for the browser source.
 
 Requires **Python 3.10+**.
 
+> **Not on PyPI yet.** `pip install gchat-archive` fails with *"No matching distribution found"*
+> until the first release is uploaded — see [docs/PUBLISHING.md](docs/PUBLISHING.md). Until then
+> install straight from the repository, which works today and is what the commands below use.
+
 ### macOS / Linux
 
 ```bash
-pipx install "gchat-archive[text]"      # recommended: isolated, on your PATH
-# or
-python3 -m pip install --user "gchat-archive[text]"
+# simplest: an isolated install on your PATH
+pipx install git+https://github.com/tunguyenatwork/gchat-archive.git
+pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4   # document text search
+
+# or, plain pip
+python3 -m pip install --user "gchat-archive[text] @ git+https://github.com/tunguyenatwork/gchat-archive.git"
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
 py -m pip install --user "pipx"
-py -m pipx install "gchat-archive[text]"
+py -m pipx install git+https://github.com/tunguyenatwork/gchat-archive.git
+py -m pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4
 ```
 
-`[text]` adds the document parsers (pypdf, python-docx, openpyxl). Without it everything still works — search just won't look inside attachments.
+The document parsers (pypdf, python-docx, openpyxl, beautifulsoup4) are optional — without them
+everything still works, search just won't look inside attachments. Once published, all of this
+collapses to `pipx install "gchat-archive[text]"`.
 
 ### From a checkout
 
