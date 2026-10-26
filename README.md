@@ -1,6 +1,6 @@
 # gchat-archive
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/your-bmc-username)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/tu.nguyen.atwork)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -263,7 +263,7 @@ so re-run the install after changing anything under `web/`.
 
 If this saved you an afternoon of scrolling, you can buy me a coffee:
 
-<a href="https://www.buymeacoffee.com/your-bmc-username" target="_blank">
+<a href="https://www.buymeacoffee.com/tu.nguyen.atwork" target="_blank">
   <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="44" width="159">
 </a>
 
