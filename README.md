@@ -97,6 +97,8 @@ gchat-archive serve      # http://127.0.0.1:8765
 | `gchat-archive accounts list\|use\|remove` | Manage accounts |
 | `gchat-archive schedule set "0 5 * * *"` | Install the nightly sync (cron on macOS/Linux, Task Scheduler on Windows) |
 | `gchat-archive schedule pause\|resume\|status` | Inspect or pause the schedule |
+| `gchat-archive backup [--kind config\|archive\|full]` | Write a restorable `.tar.gz` |
+| `gchat-archive restore FILE [--force]` | Install a backup (config, database, rules) |
 | `gchat-archive doctor` | Check the install: paths, token, optional parsers |
 | `gchat-archive browser launch` | Start Chrome with a debug port on your existing profile |
 | `gchat-archive browser calibrate` | Check that the page markup is understood |
@@ -149,6 +151,26 @@ Everything stays on your machine. The only network traffic is to Google's APIs.
 - `client_secret.json`, tokens and the archive are in `.gitignore` — never commit them
 
 ---
+
+## Backup and restore
+
+Settings → **Backup & restore** downloads a `.tar.gz`, and the same panel installs
+one on another machine.
+
+| Kind | Contains | Typical size |
+|---|---|---|
+| `config` | OAuth client, account registry, password hash, per-account rules and sync watermarks | ~40 KB |
+| `archive` | the above + `chats.sqlite` (all messages, search index) | ~500 MB |
+| `full` | the above + `raw/` JSONL and downloaded attachments | ~3 GB |
+
+Every backup carries a `manifest.json` (version, counts, kind) and **includes
+credentials** — that is what makes a restore self-sufficient, so store it
+privately. Restoring asks first: it shows the backup's date, kind and message
+count, copies the current settings to `pre-restore-<timestamp>/`, then installs.
+A restore into an empty install (the "new system" case) needs no confirmation.
+
+CLI equivalents: `gchat-archive backup --kind archive --out ~/Desktop/gca.tar.gz`,
+`gchat-archive restore ~/Desktop/gca.tar.gz`.
 
 ## Browser source (no OAuth)
 

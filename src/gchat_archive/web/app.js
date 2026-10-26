@@ -1492,6 +1492,88 @@
     }
   }
 
+
+  function fmtBytes(n) {
+    if (!n) return "0 KB";
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + " GB";
+    if (n >= 1e6) return Math.round(n / 1e6) + " MB";
+    return Math.max(1, Math.round(n / 1e3)) + " KB";
+  }
+
+  function backupHTML(sizes) {
+    const s = sizes || {};
+    return `<section>
+      <h4>Backup &amp; restore</h4>
+      <p class="sched-note">
+        Backups include credentials — the OAuth client, account tokens and the password hash —
+        so the file can rebuild this archive on another machine. Keep it somewhere private.
+      </p>
+      <div class="sched-row">
+        <a class="linkbtn" href="/api/backup?kind=config">Settings only · ${fmtBytes(s.config)}</a>
+        <a class="linkbtn" href="/api/backup?kind=archive">Archive + database · ${fmtBytes(s.archive)}</a>
+        <a class="linkbtn" href="/api/backup?kind=full">Everything (raw + files) · ${fmtBytes(s.full)}</a>
+      </div>
+      <div class="cs-box">
+        <div class="cs-row"><span class="cs-dot ok"></span><span>Restore from a backup file (<code>.tar.gz</code>)</span></div>
+        <div class="cs-actions">
+          <label class="linkbtn">Choose file<input type="file" id="restore-file" accept=".gz,.tgz,application/gzip" hidden></label>
+        </div>
+        <p class="sched-note" id="restore-status"></p>
+        <div class="sched-row hidden" id="restore-confirm">
+          <button class="primary" id="restore-yes">Replace this archive</button>
+          <button class="linkbtn" id="restore-no">Cancel</button>
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function uploadBackup(file) {
+    const status = el.modalBody.querySelector("#restore-status");
+    const confirmBox = el.modalBody.querySelector("#restore-confirm");
+    if (!file) return;
+    status.textContent = `Uploading ${fmtBytes(file.size)}…`;
+    confirmBox.classList.add("hidden");
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/backup/restore");
+    xhr.setRequestHeader("Content-Type", "application/gzip");
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) status.textContent = `Uploading ${fmtBytes(e.loaded)} of ${fmtBytes(e.total)}…`;
+    });
+    xhr.addEventListener("load", () => {
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || "{}"); } catch { /* keep empty */ }
+      if (xhr.status === 409 && data.needs_confirm) {
+        const m = data.manifest || {};
+        status.innerHTML = `Backup from ${esc(String(m.created_at || "?"))} · ${esc(String(m.kind || ""))} · `
+          + `${(m.counts && m.counts.messages ? m.counts.messages.toLocaleString() : "?")} messages.<br>`
+          + `This replaces the archive on this machine. The current settings are copied aside first.`;
+        confirmBox.classList.remove("hidden");
+        return;
+      }
+      if (xhr.status !== 200) {
+        status.textContent = data.error || `Restore failed (${xhr.status})`;
+        return;
+      }
+      status.textContent = `Restored ${data.installed} files — reloading…`;
+      setTimeout(() => location.reload(), 800);
+    });
+    xhr.addEventListener("error", () => { status.textContent = "Upload failed (network error)"; });
+    xhr.send(file);
+  }
+
+  async function confirmRestore() {
+    const status = el.modalBody.querySelector("#restore-status");
+    status.textContent = "Installing…";
+    try {
+      const res = await post("/api/backup/restore-confirm", {});
+      status.textContent = `Restored ${res.installed} files — reloading…`;
+      setTimeout(() => location.reload(), 800);
+    } catch (err) {
+      status.textContent = `Restore failed: ${err.message}`;
+    }
+  }
+
   async function openSettings() {
     el.modal.classList.remove("hidden");
     el.modalTitle.textContent = "Settings";
@@ -1559,6 +1641,7 @@
           Applies to every account; each account is synced in turn.
         </p>
       </section>
+      ${backupHTML(data.backup_sizes)}
       <section>
         <h4>Security</h4>
         ${
@@ -1629,6 +1712,16 @@
           toast(`Could not update: ${err.message}`);
         }
       });
+    });
+
+    const restoreFile = el.modalBody.querySelector("#restore-file");
+    if (restoreFile) restoreFile.addEventListener("change", (e) => uploadBackup(e.target.files[0]));
+    const restoreYes = el.modalBody.querySelector("#restore-yes");
+    if (restoreYes) restoreYes.addEventListener("click", confirmRestore);
+    const restoreNo = el.modalBody.querySelector("#restore-no");
+    if (restoreNo) restoreNo.addEventListener("click", () => {
+      el.modalBody.querySelector("#restore-confirm").classList.add("hidden");
+      el.modalBody.querySelector("#restore-status").textContent = "";
     });
 
     const csFile = el.modalBody.querySelector("#cs-file");

@@ -206,6 +206,42 @@ def cmd_browser(args) -> int:
     return 0
 
 
+def cmd_backup(args) -> int:
+    from . import backup
+
+    try:
+        path = backup.create(args.kind, dest=args.out)
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    size = path.stat().st_size
+    print("wrote %s (%.1f MB, %s)" % (path, size / 1e6, args.kind))
+    print("contains credentials — store it somewhere private")
+    return 0
+
+
+def cmd_restore(args) -> int:
+    from . import backup
+
+    try:
+        result = backup.restore(args.file, force=args.force)
+    except Exception as exc:
+        print("restore failed: %s" % exc, file=sys.stderr)
+        return 2
+    if result.get("needs_confirm"):
+        manifest = result.get("manifest") or {}
+        print("this archive already has data (%s messages)." % (manifest.get("counts", {}).get("messages", "?")))
+        print("re-run with --force to replace it (the current settings are copied aside first).")
+        return 1
+    print("restored %d files from %s" % (result["installed"], args.file))
+    for account in result["counts"]["accounts"]:
+        print("  account:", account["slug"])
+    print("  messages:", result["counts"]["messages"])
+    if result.get("previous_config_saved"):
+        print("previous settings copied to a pre-restore-* folder")
+    return 0
+
+
 def cmd_doctor(args) -> int:
     from . import accounts
     print("python      :", sys.version.split()[0])
@@ -286,6 +322,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--conversation", help="archive name for the harvested conversation")
     p.add_argument("--no-build", action="store_true")
     p.set_defaults(func=cmd_browser)
+
+    p = sub.add_parser("backup", help="write a backup you can restore on another machine")
+    p.add_argument("--kind", choices=["config", "archive", "full"], default="archive",
+                   help="config: settings only · archive: + database · full: + raw messages and files")
+    p.add_argument("--out", help="destination file (default: a temp file)")
+    p.set_defaults(func=cmd_backup)
+
+    p = sub.add_parser("restore", help="install a backup file")
+    p.add_argument("file")
+    p.add_argument("--force", action="store_true", help="replace an existing archive")
+    p.set_defaults(func=cmd_restore)
 
     p = sub.add_parser("doctor", help="check the local install")
     p.set_defaults(func=cmd_doctor)

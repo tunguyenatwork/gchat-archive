@@ -14,6 +14,7 @@ import json
 import os
 import mimetypes
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -28,6 +29,7 @@ from pathlib import Path
 from . import accounts
 from . import auth
 from . import manage
+from . import backup
 from . import paths
 from . import schedule
 
@@ -364,6 +366,22 @@ def parse_client_secret(data) -> dict:
     return client
 
 
+_BACKUP_SIZES = {"at": 0.0, "data": {}}
+
+
+def backup_sizes() -> dict:
+    """Byte estimate per backup kind, cached: stat()ing 12k attachments per
+    settings open would be wasteful."""
+    now = time.time()
+    if now - _BACKUP_SIZES["at"] > 60:
+        try:
+            _BACKUP_SIZES["data"] = backup.estimate()
+        except Exception:
+            _BACKUP_SIZES["data"] = {}
+        _BACKUP_SIZES["at"] = now
+    return _BACKUP_SIZES["data"]
+
+
 def client_secret_status() -> dict:
     """What the UI shows about the stored OAuth client (never the secret itself)."""
     path = paths.client_secret()
@@ -555,6 +573,13 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(client_secret_status())
         if path == "/api/settings":
             return self.api_settings(None)
+        if path == "/api/backup/estimate":
+            try:
+                return self._json({"kinds": backup.KINDS, "bytes": backup.estimate(), "counts": backup.counts()})
+            except Exception as exc:
+                return self._json({"error": str(exc)}, 500)
+        if path == "/api/backup":
+            return self.api_backup_download()
 
         con = connect()
         try:
@@ -582,6 +607,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urllib.parse.urlsplit(self.path)
         self.server.query = urllib.parse.parse_qs(parsed.query)
+
+        # A backup upload is a raw gzip stream, not JSON: handle it before the
+        # body is parsed or it would be swallowed by json.loads.
+        if parsed.path == "/api/backup/restore":
+            try:
+                if not self.authed():
+                    return self._json({"error": "authentication required", "login": True}, 401)
+                return self.api_backup_upload(int(self.headers.get("Content-Length") or 0))
+            except Exception as exc:
+                return self._json({"error": "%s: %s" % (type(exc).__name__, exc)}, 500)
         try:
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -615,6 +650,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_attachment_delete(body)
         if path == "/api/oauth/client-secret":
             return self.api_client_secret(body)
+        if path == "/api/backup/restore-confirm":
+            return self.api_backup_confirm()
         if path == "/api/settings/schedule":
             return self.api_save_schedule(body)
         if path == "/api/settings/account/activate":
@@ -671,9 +708,74 @@ class Handler(BaseHTTPRequestHandler):
                 "schedule": schedule.status(),
                 "oauth_available": bool(oauth_client()),
                 "client_secret": client_secret_status(),
+                "backup_sizes": backup_sizes(),
                 "port": self.server.server_port,
             }
         )
+
+    def api_backup_download(self):
+        """Build the requested backup and stream it to the browser."""
+        kind = (self.server.query.get("kind") or ["archive"])[0]
+        if kind not in backup.KINDS:
+            return self._json({"error": "kind must be one of %s" % ", ".join(backup.KINDS)}, 400)
+        work = paths.data_home() / ".backup-work"
+        work.mkdir(parents=True, exist_ok=True)
+        target = work / "backup.tar.gz"
+        try:
+            backup.create(kind, dest=target)
+            size = target.stat().st_size
+            self.send_response(200)
+            self.send_header("Content-Type", "application/gzip")
+            self.send_header("Content-Disposition",
+                             'attachment; filename="gchat-archive-%s-%s.tar.gz"'
+                             % (kind, time.strftime("%Y%m%d-%H%M%S")))
+            self.send_header("Content-Length", str(size))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            with target.open("rb") as fh:
+                shutil.copyfileobj(fh, self.wfile, 1024 * 1024)
+        finally:
+            target.unlink(missing_ok=True)
+            try:
+                work.rmdir()
+            except OSError:
+                pass
+
+    def api_backup_upload(self, length: int):
+        """Receive a backup, then try to install it (asks before overwriting)."""
+        if length <= 0:
+            return self._json({"error": "empty upload"}, 400)
+        dest = paths.data_home() / "backup-upload.tar.gz"
+        remaining = length
+        with dest.open("wb") as fh:
+            while remaining > 0:
+                chunk = self.rfile.read(min(1024 * 1024, remaining))
+                if not chunk:
+                    break
+                fh.write(chunk)
+                remaining -= len(chunk)
+        try:
+            result = backup.restore(dest, force=False)
+        except Exception as exc:
+            dest.unlink(missing_ok=True)
+            return self._json({"error": str(exc)}, 400)
+        if result.get("ok"):
+            dest.unlink(missing_ok=True)
+            return self._json(result)
+        return self._json(result, 409)
+
+    def api_backup_confirm(self):
+        """Install the backup uploaded a moment ago, replacing this archive."""
+        dest = paths.data_home() / "backup-upload.tar.gz"
+        if not dest.exists():
+            return self._json({"error": "no uploaded backup to install — upload it again"}, 400)
+        try:
+            result = backup.restore(dest, force=True)
+        except Exception as exc:
+            return self._json({"error": str(exc)}, 400)
+        finally:
+            dest.unlink(missing_ok=True)
+        return self._json(result)
 
     def api_client_secret(self, body):
         """Store (or replace, or remove) the OAuth client JSON uploaded from the UI."""
