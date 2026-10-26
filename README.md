@@ -1,9 +1,10 @@
 # gchat-archive
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/tu.nguyen.atwork)
+[![PyPI](https://img.shields.io/pypi/v/gchat-archive?logo=pypi&logoColor=white)](https://pypi.org/project/gchat-archive/)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-555)](#install)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/tunguyenatwork/gchat-archive/blob/main/LICENSE)
 
 Keep a **local, searchable copy of your Google Chat history** — every space, group chat and DM — in SQLite with full-text search, a browser UI that works offline, and a nightly sync.
 
@@ -29,7 +30,7 @@ Two ways to collect, one archive:
 | Gets | everything incl. attachments + document text | rendered messages |
 | Stability | stable API | depends on Google's markup |
 
-See [docs/BROWSER.md](docs/BROWSER.md) for the browser source.
+See [docs/BROWSER.md](https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/BROWSER.md) for the browser source.
 
 ---
 
@@ -37,37 +38,30 @@ See [docs/BROWSER.md](docs/BROWSER.md) for the browser source.
 
 Requires **Python 3.10+**.
 
-> **Not on PyPI yet.** `pip install gchat-archive` fails with *"No matching distribution found"*
-> until the first release is uploaded — see [docs/PUBLISHING.md](docs/PUBLISHING.md). Until then
-> install straight from the repository, which works today and is what the commands below use.
-
 ### macOS / Linux
 
 ```bash
-# simplest: an isolated install on your PATH
-pipx install git+https://github.com/tunguyenatwork/gchat-archive.git
-pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4   # document text search
-
-# or, plain pip
-python3 -m pip install --user "gchat-archive[text] @ git+https://github.com/tunguyenatwork/gchat-archive.git"
+pipx install "gchat-archive[text]"        # recommended: isolated, on your PATH
+# or
+python3 -m pip install --user "gchat-archive[text]"
 ```
 
 ### Windows (PowerShell)
 
 ```powershell
 py -m pip install --user "pipx"
-py -m pipx install git+https://github.com/tunguyenatwork/gchat-archive.git
-py -m pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4
+py -m pipx install "gchat-archive[text]"
 ```
 
-The document parsers (pypdf, python-docx, openpyxl, beautifulsoup4) are optional — without them
-everything still works, search just won't look inside attachments. Once published, all of this
-collapses to `pipx install "gchat-archive[text]"`.
+`[text]` adds the document parsers (pypdf, python-docx, openpyxl, beautifulsoup4). Without it
+everything still works — search just won't look inside attachments. Installing from git works too:
+`pipx install git+https://github.com/tunguyenatwork/gchat-archive.git`, then
+`pipx inject gchat-archive pypdf python-docx openpyxl beautifulsoup4`.
 
 ### From a checkout
 
 ```bash
-git clone https://github.com/yourname/gchat-archive.git
+git clone https://github.com/tunguyenatwork/gchat-archive.git
 cd gchat-archive
 python3 -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -e ".[text,dev]"
@@ -100,7 +94,7 @@ A fresh install opens **`/setup`** by itself:
 
 Prefer files to clicks? Put the JSON at `~/.gchat-archive/client_secret.json` (or point
 `GCHAT_CLIENT_SECRET` at it) and run `gchat-archive login` — same flow. Full walkthrough with
-troubleshooting: **[docs/SETUP.md](docs/SETUP.md)**.
+troubleshooting: **[docs/SETUP.md](https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/SETUP.md)**.
 
 ---
 
@@ -255,7 +249,7 @@ It drives your signed-in Chrome over the DevTools protocol, scrolls the open con
 the same `raw/*.jsonl` the API source writes. No Google Cloud project, no scopes, no token.
 Experimental: it depends on the rendered DOM, which is why `calibrate` exists — it reports whether the
 current markup is understood. Attachments are not collected in this mode. Details and limits:
-[docs/BROWSER.md](docs/BROWSER.md).
+[docs/BROWSER.md](https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/BROWSER.md).
 
 ## Development
 
