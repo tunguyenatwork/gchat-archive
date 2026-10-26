@@ -44,28 +44,38 @@ python -m twine upload dist/gchat_archive-0.3.0*
 git tag v0.3.0 && git push --tags
 ```
 
-## Trusted publishing (no long-lived token)
+## If `twine` is not installed
 
-On PyPI → *Publishing* → add a GitHub publisher for `tunguyenatwork/gchat-archive` with workflow
-`release.yml` and environment `pypi`. Then a tag push uploads without any secret:
+twine is a separate tool, not part of Python — `No module named twine` just means it is missing:
 
-```yaml
-# .github/workflows/release.yml
-name: release
-on:
-  push:
-    tags: ["v*"]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions: { id-token: write }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install build && python -m build
-      - uses: pypa/gh-action-pypi-publish@release/v1
+```bash
+python3 -m pip install --user twine        # then: python3 -m twine upload dist/…
+# or install it once and never think about it again:
+pipx install twine && twine upload dist/gchat_archive-0.2.0*
 ```
+
+## Trusted publishing (no token, no twine)
+
+`.github/workflows/release.yml` already does this — build, `twine check`, install the wheel and run
+`gchat-archive --help`, then publish with OIDC. It needs one one-time link on PyPI:
+
+PyPI → *Your project → Publishing → Add a new publisher → GitHub*, with
+
+| field | value |
+|---|---|
+| owner | `tunguyenatwork` |
+| repository | `gchat-archive` |
+| workflow name | `release.yml` |
+| environment | `pypi` |
+
+Then publishing is just:
+
+```bash
+git tag v0.2.0 && git push --tags
+```
+
+The workflow appears under the Actions tab and the run shows whether the publisher matched. Until
+that publisher exists the upload step fails — it cannot publish without your authorisation.
 
 ## Checklist before the first upload
 
