@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gchat-archive"
-version = "0.2.3"
+version = "0.2.4"
 description = "Keep a local, searchable copy of your Google Chat history"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,7 +54,12 @@ dev = [
 gchat-archive = "gchat_archive.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/yourname/gchat-archive"
+Homepage = "https://tunguyenatwork.github.io/gchat-archive/"
+Source = "https://github.com/tunguyenatwork/gchat-archive"
+Documentation = "https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/INSTALL.md"
+Issues = "https://github.com/tunguyenatwork/gchat-archive/issues"
+Changelog = "https://github.com/tunguyenatwork/gchat-archive/releases"
+Funding = "https://www.buymeacoffee.com/tu.nguyen.atwork"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
