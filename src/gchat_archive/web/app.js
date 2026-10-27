@@ -279,19 +279,44 @@
   // ---------- one-off sync (sidebar button) ----------
   let syncPoll = null;
 
+  function syncTotals() {
+    const m = state.meta || {};
+    if (!m.messages) return "";
+    const bits = [`${m.messages.toLocaleString()} messages`];
+    if (m.spaces) bits.push(`${m.spaces.toLocaleString()} conversations`);
+    return bits.join(" · ");
+  }
+
   function renderSync(status) {
     const s = status || {};
+    const totals = syncTotals();
+
     el.syncNow.disabled = !!s.running;
     el.syncNow.textContent = s.running ? "Syncing…" : "Sync now";
+
+    let text = "";
+    let kind = "idle";
+    const rc = s.returncode;
     if (s.running) {
-      el.syncState.textContent = `${Math.max(1, Math.round(s.seconds || 0))}s — fetching new messages`;
-    } else if (s.state === "failed") {
-      el.syncState.textContent = `last sync failed (exit ${s.returncode})`;
-    } else if (s.state === "done") {
-      el.syncState.textContent = `synced in ${Math.round(s.seconds || 0)}s`;
+      kind = "busy";
+      text = `⟳ in progress · ${Math.max(1, Math.round(s.seconds || 0))}s`;
+    } else if (rc !== null && rc !== undefined && rc !== 0) {
+      kind = "fail";
+      text = `✗ failed (exit ${rc})`;
+    } else if (rc === 0) {
+      kind = "ok";
+      const when = s.finished_at ? relTime(s.finished_at) : "just now";
+      text = `✓ synced ${when} · ${Math.round(s.seconds || 0)}s`;
+    } else if (s.last_run_at) {
+      kind = s.last_ok === false ? "fail" : "ok";
+      text = `${s.last_ok === false ? "✗" : "✓"} last sync ${relTime(s.last_run_at)}`;
     } else {
-      el.syncState.textContent = s.last_run_at ? `last sync ${relTime(s.last_run_at)}` : "never synced here";
+      text = "never synced here";
     }
+
+    el.syncState.textContent = totals ? `${text} · ${totals}` : text;
+    el.syncState.className = "subtle sync-" + kind;
+    el.syncState.title = s.last_detail || s.command || "";
   }
 
   async function pollSync() {
@@ -303,7 +328,8 @@
       } else {
         clearInterval(syncPoll);
         syncPoll = null;
-        refreshStats();
+        await refreshStats();
+        renderSync(status);
       }
     } catch {
       clearInterval(syncPoll);
@@ -327,7 +353,16 @@
     }
   }
 
-  if (el.syncNow) el.syncNow.addEventListener("click", () => startOneOffSync());
+  if (el.syncNow) {
+    el.syncNow.addEventListener("click", () => startOneOffSync());
+    // Paint the bar on load, and keep polling if a sync is already running.
+    api("/api/sync/status")
+      .then((status) => {
+        renderSync(status);
+        if (status.running) pollSync();
+      })
+      .catch(() => {});
+  }
 
   async function refreshStats() {
     try {

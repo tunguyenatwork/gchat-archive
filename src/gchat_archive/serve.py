@@ -420,12 +420,19 @@ def sync_status() -> dict:
         last = json.loads((paths.data_home() / "last_sync.json").read_text())
     except (OSError, json.JSONDecodeError):
         last = {}
+    def stamp(value: float) -> str | None:
+        """ISO local time: the UI's relTime() parses strings, not epoch floats."""
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(value)) if value else None
+
     return {
         "running": running,
-        "started_at": state["started_at"],
-        "finished_at": state["finished_at"],
+        "started_at": stamp(state["started_at"]),
+        "finished_at": stamp(state["finished_at"]),
         "returncode": state["returncode"],
-        "seconds": (time.time() - state["started_at"]) if running and state["started_at"] else 0,
+        # elapsed: live while running, final once finished (was hard-coded 0 after)
+        "seconds": round(
+            (time.time() if running else state["finished_at"]) - state["started_at"], 1
+        ) if state["started_at"] and (running or state["finished_at"]) else 0,
         "tail": tail,
         "last_run_at": last.get("at"),
         "last_ok": last.get("ok"),
