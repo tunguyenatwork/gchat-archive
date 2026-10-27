@@ -10,7 +10,11 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "gchat-archive contributors" }]
-keywords = ["google-chat", "archive", "offline", "sqlite", "fts5", "backup"]
+keywords = [
+    "google-chat", "google-chat-export", "google-chat-backup", "chat-archive",
+    "export-google-chat-history", "google-workspace", "archive", "offline",
+    "sqlite", "fts5", "full-text-search", "backup", "data-portability",
+]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",

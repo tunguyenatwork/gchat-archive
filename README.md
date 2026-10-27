@@ -1,4 +1,4 @@
-# gchat-archive
+# gchat-archive — export, search and back up your Google Chat history offline
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/tu.nguyen.atwork)
 [![PyPI](https://img.shields.io/pypi/v/gchat-archive?logo=pypi&logoColor=white)](https://pypi.org/project/gchat-archive/)
