@@ -71,6 +71,11 @@ jobs:
             exit 1
           fi
           echo "$out"
+      # End-to-end on the platform itself: start the server, fetch the UI, probe
+      # the scheduler/service code paths (read-only), in a temp data directory.
+      - name: Runtime smoke test
+        run: python scripts/smoke.py
+
       - name: Build wheel
         id: build
         run: |
