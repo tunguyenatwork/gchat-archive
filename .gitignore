@@ -27,3 +27,8 @@ venv/
 .idea/
 .vscode/
 Thumbs.db
+
+# raw screenshots: they contain real conversations and are redacted before
+# anything lands in docs/images/
+Screenshot*.png
+docs/images/_*.png

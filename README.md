@@ -22,6 +22,18 @@ Google Chat has no export button. This gives you one:
 
 macOS · Windows · Linux.
 
+## Screenshots
+
+| Browsing the archive | Pruning a conversation |
+|---|---|
+| ![Conversation list, search and filters over an archived thread](docs/images/app.png) | ![Conversation menu with exclude and delete actions](docs/images/manage.png) |
+
+| Settings — accounts, schedule, backup, service | A single thread |
+|---|---|
+| ![Settings panel: sync schedule, backup and restore, run at login, security](docs/images/settings.png) | ![One direct message thread with date filtering](docs/images/thread.png) |
+
+<sub>Message bodies are blurred in these screenshots — they contain real conversations. Everything else is the actual UI.</sub>
+
 Two ways to collect, one archive:
 
 | | **API source** (default) | **Browser source** (no setup) |
