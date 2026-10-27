@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import tarfile
 import threading
 import urllib.request
@@ -71,8 +72,9 @@ def test_archive_backup_restores_a_working_database(populated: Path, tmp_path: P
     finally:
         con.close()
 
-    # secrets come back owner-only
-    assert (fresh / "client_secret.json").stat().st_mode & 0o077 == 0
+    # secrets come back owner-only (POSIX only: Windows has no mode bits)
+    if os.name != "nt":
+        assert (fresh / "client_secret.json").stat().st_mode & 0o077 == 0
 
 
 def test_restore_asks_before_overwriting(populated: Path, tmp_path: Path) -> None:

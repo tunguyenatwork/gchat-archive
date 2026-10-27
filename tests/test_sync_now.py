@@ -24,8 +24,12 @@ def server(tmp_path: Path, monkeypatch):
     (home / "accounts").mkdir(parents=True)
     (home / "accounts.json").write_text(json.dumps(ACCOUNTS))
     monkeypatch.setenv("GCHAT_ARCHIVE_HOME", str(home))
-    # a sync that finishes quickly, prints something, and needs no Google access
-    monkeypatch.setenv("GCHAT_SYNC_COMMAND", "sh -c 'echo fetching; sleep 1; echo done'")
+    # a sync that finishes quickly, prints something, and needs no Google access.
+    # Python, not `sh`: Windows runners have no POSIX shell.
+    import sys
+
+    quick = "%s -c \"import time; print('fetching'); time.sleep(1); print('done')\"" % sys.executable
+    monkeypatch.setenv("GCHAT_SYNC_COMMAND", quick)
 
     from gchat_archive import serve
 

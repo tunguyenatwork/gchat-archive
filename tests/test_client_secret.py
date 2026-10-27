@@ -73,7 +73,8 @@ def test_upload_replaces_and_removes(server) -> None:
 
     stored = home / "client_secret.json"
     assert stored.is_file()
-    assert stat.S_IMODE(stored.stat().st_mode) == 0o600
+    if os.name != "nt":  # Windows has no POSIX permission bits to assert
+        assert stat.S_IMODE(stored.stat().st_mode) == 0o600
     assert json.loads(stored.read_text())["installed"]["project_id"] == "chat-archive-demo"
 
     status, body = call("%s/api/oauth/client-secret" % base, {"remove": True})
