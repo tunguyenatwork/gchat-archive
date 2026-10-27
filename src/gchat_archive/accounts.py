@@ -31,6 +31,24 @@ TOKENS_DIR = ROOT / "tokens"
 # No implicit token: every install signs in its own account through OAuth.
 DEFAULT_TOKEN = TOKENS_DIR / "default.json"
 
+
+def _refresh_root() -> None:
+    """Re-read the data directory.
+
+    These were module constants, so anything imported before ``--data-dir`` took
+    effect (a test, or a long-running process) kept writing to the previous
+    location. Cheap to recompute, so every entry point does.
+    """
+    global ROOT, REGISTRY, ACCOUNTS_DIR, TOKENS_DIR, DEFAULT_TOKEN
+    home = paths.data_home()
+    if home == ROOT:
+        return
+    ROOT = home
+    REGISTRY = ROOT / "accounts.json"
+    ACCOUNTS_DIR = ROOT / "accounts"
+    TOKENS_DIR = ROOT / "tokens"
+    DEFAULT_TOKEN = TOKENS_DIR / "default.json"
+
 # Files that belong to an account's archive.
 ARCHIVE_FILES = ("raw", "attachments", "attachments.jsonl", "attachments_text.jsonl")
 ARCHIVE_GLOBS = ("chats.sqlite*", "state.json", "archive_manage.json", "sync.log", "final_sync.log")
@@ -43,6 +61,7 @@ def slug_for(email: str) -> str:
 
 
 def load() -> dict:
+    _refresh_root()
     if REGISTRY.exists():
         try:
             data = json.loads(REGISTRY.read_text())
@@ -171,6 +190,7 @@ def repair_manifests() -> int:
 
 def ensure() -> dict:
     """Load the registry, migrating the legacy layout if this is a first run."""
+    _refresh_root()
     data = load()
     if not data["accounts"]:
         data = migrate_legacy()

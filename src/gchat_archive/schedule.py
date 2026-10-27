@@ -34,9 +34,10 @@ def _state_file() -> Path:
     return paths.data_home() / STATE
 
 
-def record_run(ok: bool, detail: str = "") -> None:
-    """Called by ``sync`` so the UI can show when it last ran."""
+def record_run(ok: bool, detail: str = "", **extra) -> None:
+    """Called by ``sync`` so the UI can show when it last ran, and what it added."""
     data = {"at": time.strftime("%Y-%m-%dT%H:%M:%S"), "ok": bool(ok), "detail": detail[:400]}
+    data.update({k: v for k, v in extra.items() if v is not None})
     try:
         _state_file().write_text(json.dumps(data))
     except OSError:

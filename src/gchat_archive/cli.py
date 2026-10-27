@@ -40,6 +40,30 @@ def _active_ready() -> bool:
 
 # --- commands --------------------------------------------------------------
 
+def _archive_totals() -> tuple[int, int]:
+    """(messages, conversations) across every account that has a database."""
+    import sqlite3
+
+    from . import accounts as _accounts
+    from . import paths as _paths
+
+    messages = spaces = 0
+    for entry in _accounts.ensure()["accounts"]:
+        db = _accounts.account_root(entry["slug"]) / "chats.sqlite"
+        if not db.exists():
+            continue
+        try:
+            con = sqlite3.connect(_paths.ro_uri(db), uri=True, timeout=5)
+            try:
+                messages += con.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+                spaces += con.execute("SELECT COUNT(*) FROM spaces").fetchone()[0]
+            finally:
+                con.close()
+        except sqlite3.Error:
+            continue
+    return messages, spaces
+
+
 def cmd_sync(args) -> int:
     from . import accounts
     registry = accounts.ensure()
@@ -49,6 +73,7 @@ def cmd_sync(args) -> int:
         return 0
 
     started = time.time()
+    before = _archive_totals()
     failures = []
     for entry in enabled:
         accounts.set_active(entry["slug"])
@@ -77,7 +102,15 @@ def cmd_sync(args) -> int:
                 failures.append("%s: build" % entry["slug"])
 
     elapsed = time.time() - started
-    schedule.record_run(not failures, "; ".join(failures))
+    after = _archive_totals()
+    added_messages, added_spaces = after[0] - before[0], after[1] - before[1]
+    schedule.record_run(
+        not failures, "; ".join(failures),
+        added_messages=added_messages, added_spaces=added_spaces,
+        total_messages=after[0], total_spaces=after[1],
+    )
+    print("\n+%d messages, +%d conversations (%d messages / %d conversations in total)"
+          % (added_messages, added_spaces, after[0], after[1]))
     print("\n%s in %.0fs" % ("Done" if not failures else "Finished with errors", elapsed))
     for line in failures:
         print("  ! " + line)

@@ -279,17 +279,21 @@
   // ---------- one-off sync (sidebar button) ----------
   let syncPoll = null;
 
-  function syncTotals() {
-    const m = state.meta || {};
-    if (!m.messages) return "";
-    const bits = [`${m.messages.toLocaleString()} messages`];
-    if (m.spaces) bits.push(`${m.spaces.toLocaleString()} conversations`);
+  // What this run added, not the archive size: "+37 messages · +2 conversations".
+  function syncDelta(status) {
+    const msgs = status.added_messages;
+    const spaces = status.added_spaces;
+    if (msgs === null || msgs === undefined) return "";
+    if (!msgs && !spaces) return "nothing new";
+    const bits = [];
+    if (msgs) bits.push(`+${msgs.toLocaleString()} message${msgs === 1 ? "" : "s"}`);
+    if (spaces) bits.push(`+${spaces.toLocaleString()} conversation${spaces === 1 ? "" : "s"}`);
     return bits.join(" · ");
   }
 
   function renderSync(status) {
     const s = status || {};
-    const totals = syncTotals();
+    const delta = syncDelta(s);
 
     el.syncNow.disabled = !!s.running;
     el.syncNow.textContent = s.running ? "Syncing…" : "Sync now";
@@ -299,7 +303,13 @@
     const rc = s.returncode;
     if (s.running) {
       kind = "busy";
+      // the delta belongs to the previous run; showing it here would imply
+      // those messages arrived just now
       text = `⟳ in progress · ${Math.max(1, Math.round(s.seconds || 0))}s`;
+      el.syncState.textContent = text;
+      el.syncState.className = "subtle sync-" + kind;
+      el.syncState.title = s.command || "";
+      return;
     } else if (rc !== null && rc !== undefined && rc !== 0) {
       kind = "fail";
       text = `✗ failed (exit ${rc})`;
@@ -314,7 +324,7 @@
       text = "never synced here";
     }
 
-    el.syncState.textContent = totals ? `${text} · ${totals}` : text;
+    el.syncState.textContent = delta ? `${text} · ${delta}` : text;
     el.syncState.className = "subtle sync-" + kind;
     el.syncState.title = s.last_detail || s.command || "";
   }

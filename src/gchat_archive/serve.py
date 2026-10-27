@@ -438,6 +438,10 @@ def sync_status() -> dict:
         "tail": tail,
         "last_run_at": last.get("at"),
         "last_ok": last.get("ok"),
+        "added_messages": last.get("added_messages"),
+        "added_spaces": last.get("added_spaces"),
+        "total_messages": last.get("total_messages"),
+        "total_spaces": last.get("total_spaces"),
         "last_detail": last.get("detail") or "",
     }
 
@@ -837,12 +841,9 @@ class Handler(BaseHTTPRequestHandler):
             stream.close()
             state["finished_at"] = time.time()
             state["returncode"] = code
-            try:
-                schedule.record_run(code == 0,
-                                    "sync from the web UI" if code == 0
-                                    else "sync exited with code %d" % code)
-            except Exception:
-                pass
+            # No record_run here: the sync command records the run itself, with
+            # the counts it added. Writing from here overwrote those deltas with
+            # a bare timestamp.
 
         threading.Thread(target=collect, daemon=True).start()
         return self._json({"ok": True, "mode": mode, "command": " ".join(argv),
