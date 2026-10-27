@@ -387,15 +387,30 @@ _SYNC = {
 }
 
 
+def split_command(override: str, windows: bool | None = None) -> list[str]:
+    """Split a command line without mangling either platform.
+
+    POSIX splitting strips backslashes out of C:\\Python\\python.exe, so Windows
+    is split as Windows — but that leaves the surrounding quotes on each token,
+    which a child process then executes verbatim. Strip them.
+    """
+    import shlex
+
+    windows = (os.name == "nt") if windows is None else windows
+    parts = shlex.split(override, posix=not windows)
+    if windows:
+        parts = [
+            part[1:-1] if len(part) > 1 and part[0] == part[-1] and part[0] in "\"'" else part
+            for part in parts
+        ]
+    return parts
+
+
 def sync_command(mode: str = "normal") -> list[str]:
     """The argv a manual sync runs (overridable so tests need no network)."""
     override = os.environ.get("GCHAT_SYNC_COMMAND")
     if override:
-        import shlex
-
-        # posix=True strips backslashes, which would mangle a Windows path such
-        # as C:\Python\python.exe; Windows quoting is not POSIX quoting.
-        return shlex.split(override, posix=(os.name != "nt"))
+        return split_command(override)
     argv = [sys.executable, "-m", "gchat_archive"]
     default_home = Path.home() / (".%s" % "gchat-archive")
     if paths.data_home() != default_home:
