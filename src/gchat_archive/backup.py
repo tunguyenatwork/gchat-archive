@@ -204,7 +204,12 @@ def restore(archive_path: Path | str, force: bool = False, root: Path | None = N
         with tarfile.open(archive_path, "r:gz") as tar:
             members = _safe_members(tar)
             for member in members:
-                tar.extract(member, path=staging)
+                try:
+                    # `data` filter: refuse device files/absolute paths and strip
+                    # dangerous metadata. Python 3.14 will do this by default.
+                    tar.extract(member, path=staging, filter="data")
+                except TypeError:          # Python < 3.12 has no filter argument
+                    tar.extract(member, path=staging)
 
         # Keep the previous configuration so a wrong restore is recoverable.
         keep = root / ("pre-restore-%s" % time.strftime("%Y%m%d-%H%M%S"))

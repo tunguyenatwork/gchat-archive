@@ -50,11 +50,20 @@ jobs:
               print("::error title=%s::%s" % (case.get("name"), msg or "failed"))
           print("::notice::%d failing test(s) on this platform" % shown)
           PY
+      # `python -m` rather than the console script: on Windows the script lands
+      # in Scripts\ which Git Bash does not always inherit, and a "command not
+      # found" here used to be the only visible signal.
       - name: CLI smoke test
         shell: bash
         run: |
-          gchat-archive --help
-          gchat-archive doctor
+          set -e
+          python -m gchat_archive --version
+          python -m gchat_archive --help > /dev/null
+          if ! out=$(python -m gchat_archive doctor 2>&1); then
+            echo "::error title=doctor failed on this platform::$(echo "$out" | tr '\n' ' ' | tail -c 400)"
+            exit 1
+          fi
+          echo "$out"
       - name: Build wheel
         run: |
           pip install build
