@@ -7,6 +7,8 @@ from pathlib import Path
 
 from conftest import run
 
+from gchat_archive.paths import ro_uri as _ro
+
 from gchat_archive import browser_source
 
 
@@ -57,7 +59,7 @@ def test_browser_rows_build_into_a_searchable_archive(archive: Path) -> None:
 
     run("build", home=archive)
 
-    con = sqlite3.connect("file:%s?mode=ro" % (root / "chats.sqlite"), uri=True)
+    con = sqlite3.connect(_ro(root / "chats.sqlite"), uri=True)
     try:
         hits = con.execute(
             "SELECT m.text FROM messages_fts f JOIN messages m ON m.rowid = f.rowid "

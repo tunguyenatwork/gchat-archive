@@ -14,6 +14,8 @@ import pytest
 
 from conftest import run
 
+from gchat_archive.paths import ro_uri as _ro
+
 from gchat_archive import backup
 
 
@@ -64,7 +66,7 @@ def test_archive_backup_restores_a_working_database(populated: Path, tmp_path: P
     assert db.is_file()
 
     import sqlite3
-    con = sqlite3.connect("file:%s?mode=ro" % db, uri=True)
+    con = sqlite3.connect(_ro(db), uri=True)
     try:
         assert con.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 4
         rules = json.loads((fresh / "accounts/demo/archive_manage.json").read_text())

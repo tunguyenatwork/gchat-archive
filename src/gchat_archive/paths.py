@@ -45,6 +45,16 @@ def client_secret() -> Path:
     return data_home() / "client_secret.json"
 
 
+def ro_uri(path: Path | str) -> str:
+    """SQLite read-only URI that Windows and POSIX both accept.
+
+    "file:C:\\data\\x.db?mode=ro" is parsed as the *authority* "C" on Windows and
+    fails to open; Path.as_uri() produces file:///C:/data/x.db, which works
+    everywhere.
+    """
+    return Path(path).resolve().as_uri() + "?mode=ro"
+
+
 def web_root() -> Path:
     """Static reader UI, shipped inside the package."""
     return Path(__file__).resolve().parent / "web"

@@ -76,7 +76,7 @@ MIME = {
 
 
 def connect() -> sqlite3.Connection:
-    con = sqlite3.connect("file:%s?mode=ro" % DB(), uri=True, timeout=10)
+    con = sqlite3.connect(paths.ro_uri(DB()), uri=True, timeout=10)
     con.row_factory = sqlite3.Row
     return con
 
@@ -84,7 +84,7 @@ def connect() -> sqlite3.Connection:
 def connect_for(slug: str) -> sqlite3.Connection:
     """Read-only connection to one account's archive."""
     path = accounts.account_root(slug) / "chats.sqlite"
-    con = sqlite3.connect("file:%s?mode=ro" % path, uri=True, timeout=10)
+    con = sqlite3.connect(paths.ro_uri(path), uri=True, timeout=10)
     con.row_factory = sqlite3.Row
     return con
 
@@ -770,7 +770,7 @@ class Handler(BaseHTTPRequestHandler):
             count = 0
             if db.exists():
                 try:
-                    probe = sqlite3.connect("file:%s?mode=ro" % db, uri=True, timeout=5)
+                    probe = sqlite3.connect(paths.ro_uri(db), uri=True, timeout=5)
                     count = probe.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
                     probe.close()
                 except sqlite3.Error:

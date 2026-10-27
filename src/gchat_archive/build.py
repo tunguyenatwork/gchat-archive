@@ -16,10 +16,12 @@ from __future__ import annotations
 import json
 import sqlite3
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
 from . import accounts
+from . import paths
 from . import manage
 
 ARCHIVE = accounts.active_root()  # per-account archive directory
@@ -280,7 +282,7 @@ def previous_message_count() -> int:
     if not DB.exists():
         return 0
     try:
-        con = sqlite3.connect("file:%s?mode=ro" % DB, uri=True, timeout=5)
+        con = sqlite3.connect(paths.ro_uri(DB), uri=True, timeout=5)
         try:
             return con.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
         finally:
@@ -453,7 +455,16 @@ def main() -> None:
     con.commit()
     con.execute("PRAGMA optimize")
     con.close()
-    tmp_db.replace(DB)
+    # Windows refuses to replace a file that a reader still has open; give the
+    # in-flight request a moment rather than failing the whole build.
+    for attempt in range(20):
+        try:
+            tmp_db.replace(DB)
+            break
+        except OSError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
 
     size_mb = DB.stat().st_size / 1e6
     print("Built %s" % DB)

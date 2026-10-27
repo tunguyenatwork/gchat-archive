@@ -7,13 +7,15 @@ from pathlib import Path
 
 from conftest import run
 
+from gchat_archive.paths import ro_uri as _ro
+
 
 def db(home: Path) -> Path:
     return home / "accounts" / "demo" / "chats.sqlite"
 
 
 def query(home: Path, sql: str, args: tuple = ()):
-    con = sqlite3.connect("file:%s?mode=ro" % db(home), uri=True)
+    con = sqlite3.connect(_ro(db(home)), uri=True)
     try:
         return con.execute(sql, args).fetchall()
     finally:

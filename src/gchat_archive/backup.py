@@ -99,7 +99,7 @@ def counts(root: Path | None = None) -> dict:
         try:
             import sqlite3
 
-            con = sqlite3.connect("file:%s?mode=ro" % account_dir, uri=True, timeout=5)
+            con = sqlite3.connect(paths.ro_uri(account_dir), uri=True, timeout=5)
             summary["messages"] += con.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             summary["spaces"] += con.execute("SELECT COUNT(*) FROM spaces").fetchone()[0]
             con.close()
