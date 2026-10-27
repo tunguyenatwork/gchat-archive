@@ -35,7 +35,6 @@ from . import backup
 from . import paths
 from . import schedule
 from . import service
-from . import syncjob
 
 def ARCHIVE() -> Path:  # noqa: N802 - kept call-compatible with the old constant
     """Root of the active account's archive (resolved per call)."""
@@ -392,7 +391,9 @@ def sync_command(mode: str = "normal") -> list[str]:
     """The argv a manual sync runs (overridable so tests need no network)."""
     override = os.environ.get("GCHAT_SYNC_COMMAND")
     if override:
-        return override.split()
+        import shlex
+
+        return shlex.split(override)
     argv = [sys.executable, "-m", "gchat_archive"]
     default_home = Path.home() / (".%s" % "gchat-archive")
     if paths.data_home() != default_home:
@@ -655,8 +656,6 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/service/status":
             return self._json(service.status())
         if path == "/api/sync/status":
-            return self._json(syncjob.JOB.status())
-        if path == "/api/sync/status":
             return self._json(sync_status())
 
         con = connect()
@@ -732,10 +731,6 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_backup_confirm()
         if path == "/api/sync/start":
             return self.api_sync_start(body)
-        if path == "/api/sync/start":
-            return self.api_sync_start()
-        if path == "/api/sync/stop":
-            return self.api_sync_stop()
         if path == "/api/service/install":
             return self.api_service("install")
         if path == "/api/service/uninstall":
@@ -798,7 +793,7 @@ class Handler(BaseHTTPRequestHandler):
                 "client_secret": client_secret_status(),
                 "backup_sizes": backup_sizes(),
                 "service": service.status(),
-                "sync": syncjob.JOB.status(),
+                "sync": sync_status(),
                 "port": self.server.server_port,
             }
         )
@@ -843,18 +838,6 @@ class Handler(BaseHTTPRequestHandler):
         threading.Thread(target=collect, daemon=True).start()
         return self._json({"ok": True, "mode": mode, "command": " ".join(argv),
                            "status": sync_status()})
-
-    def api_sync_start(self):
-        """Kick off a one-off sync; the UI polls /api/sync/status while it runs."""
-        mode = (self.server.query.get("mode") or [""])[0]
-        ok, detail = syncjob.JOB.start(mode="check-all" if mode == "check-all" else None)
-        if not ok:
-            return self._json({"ok": False, "error": detail, "status": syncjob.JOB.status()}, 409)
-        return self._json({"ok": True, "status": syncjob.JOB.status()})
-
-    def api_sync_stop(self):
-        stopped = syncjob.JOB.stop()
-        return self._json({"ok": True, "stopped": stopped, "status": syncjob.JOB.status()})
 
     def api_service(self, action):
         """Install or remove the login service for this install."""

@@ -36,7 +36,7 @@ def test_package_imports_cleanly() -> None:
     proc = subprocess.run(
         [sys.executable, "-c",
          "import gchat_archive.api, gchat_archive.build, gchat_archive.fetch, "
-         "gchat_archive.serve, gchat_archive.syncjob, gchat_archive.backup, gchat_archive.service"],
+         "gchat_archive.serve, gchat_archive.backup, gchat_archive.service, gchat_archive.schedule"],
         capture_output=True, text=True,
     )
     assert proc.returncode == 0, proc.stderr
