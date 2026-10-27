@@ -64,3 +64,23 @@ def test_missing_everywhere_is_reported_not_invented(home: Path) -> None:
 
     assert accounts.active_token() == Path("/nope/token.json")
     assert not accounts.active_token().exists()
+
+
+def test_two_data_dirs_in_one_process_use_different_auth_files(tmp_path, monkeypatch) -> None:
+    """A module constant froze the data directory, so the password check read the
+    real install's auth.json and every request looked unauthenticated."""
+    from gchat_archive import auth
+
+    first, second = tmp_path / "one", tmp_path / "two"
+    for home in (first, second):
+        home.mkdir()
+
+    monkeypatch.setenv("GCHAT_ARCHIVE_HOME", str(first))
+    auth.set_password("first-password")
+    assert auth.configured() is True
+
+    monkeypatch.setenv("GCHAT_ARCHIVE_HOME", str(second))
+    assert auth.configured() is False, "second directory must look fresh"
+
+    monkeypatch.setenv("GCHAT_ARCHIVE_HOME", str(first))
+    assert auth.verify("first-password") is True

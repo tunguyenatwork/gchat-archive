@@ -21,8 +21,14 @@ from pathlib import Path
 
 from . import paths
 
-ROOT = paths.data_home()
-AUTH_FILE = ROOT / "auth.json"
+def root() -> Path:
+    """Resolved per call: a module constant froze the data directory at import,
+    so a process that changed it later (--data-dir, a test) read the wrong file."""
+    return paths.data_home()
+
+
+def auth_file() -> Path:
+    return root() / "auth.json"
 ITERATIONS = 240_000
 SESSION_TTL = 7 * 24 * 3600
 RESET_TTL = 30 * 60
@@ -36,22 +42,24 @@ def _hash(password: str, salt: bytes) -> bytes:
 
 
 def _load() -> dict:
-    if AUTH_FILE.exists():
+    path = auth_file()
+    if path.exists():
         try:
-            return json.loads(AUTH_FILE.read_text())
+            return json.loads(path.read_text())
         except json.JSONDecodeError:
             pass
     return {}
 
 
 def _save(data: dict) -> None:
-    ROOT.mkdir(parents=True, exist_ok=True)
-    tmp = AUTH_FILE.with_suffix(".tmp")
+    path = auth_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(data, indent=2))
     os.chmod(tmp, 0o600)
-    os.replace(tmp, AUTH_FILE)
+    os.replace(tmp, path)
     try:
-        os.chmod(AUTH_FILE, 0o600)
+        os.chmod(path, 0o600)
     except OSError:
         pass
 
