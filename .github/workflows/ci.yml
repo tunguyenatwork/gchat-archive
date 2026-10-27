@@ -24,7 +24,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[text,dev]"
       - name: Tests
-        run: pytest -q
+        run: pytest -q --junitxml=report.xml
+
+      # Publish each failure as an annotation: those are readable without
+      # downloading logs, which matters when a platform-specific failure has to
+      # be diagnosed from outside (e.g. Windows from a macOS workstation).
+      - name: Report failures
+        if: failure()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import glob, os, xml.etree.ElementTree as ET
+          path = "report.xml"
+          if not os.path.exists(path):
+              print("::error title=no junit report::pytest produced no report.xml")
+              raise SystemExit(0)
+          tree = ET.parse(path)
+          shown = 0
+          for case in tree.iter("testcase"):
+              problem = case.find("failure") or case.find("error")
+              if problem is None:
+                  continue
+              shown += 1
+              msg = (problem.get("message") or "").strip().replace("\n", " ")[:180]
+              print("::error title=%s::%s" % (case.get("name"), msg or "failed"))
+          print("::notice::%d failing test(s) on this platform" % shown)
+          PY
       - name: CLI smoke test
         shell: bash
         run: |
