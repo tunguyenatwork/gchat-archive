@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tunguyenatwork.github.io/gchat-archive/sitemap.xml

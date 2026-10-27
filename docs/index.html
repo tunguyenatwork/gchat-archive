@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gchat-archive — export and search your Google Chat history offline</title>
+<meta name="description" content="Export every Google Chat space, group chat and DM to a local SQLite archive with full-text search. Works with work accounts that Google Takeout skips. macOS, Windows, Linux. Free, MIT.">
+<meta name="keywords" content="export google chat history, google chat backup, google chat archive, google chat to sqlite, search google chat offline, google chat export work account">
+<link rel="canonical" href="https://tunguyenatwork.github.io/gchat-archive/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="gchat-archive — export and search your Google Chat history offline">
+<meta property="og:description" content="Every space, group chat and DM in a local SQLite archive with full-text search. Works with work accounts that Takeout skips.">
+<meta property="og:url" content="https://tunguyenatwork.github.io/gchat-archive/">
+<meta property="og:image" content="https://tunguyenatwork.github.io/gchat-archive/images/app.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<style>
+  :root { --bg:#fff; --fg:#111827; --muted:#6b7280; --card:#f9fafb; --border:#e5e7eb; --accent:#2563eb; --code:#f3f4f6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0b1120; --fg:#e5e7eb; --muted:#9ca3af; --card:#111827; --border:#1f2937; --accent:#60a5fa; --code:#0f172a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:0 20px; }
+  header { border-bottom:1px solid var(--border); }
+  nav { display:flex; gap:18px; align-items:center; justify-content:space-between; padding:16px 0; flex-wrap:wrap; }
+  nav .brand { font-weight:700; letter-spacing:-.01em; }
+  nav a { color:var(--muted); text-decoration:none; font-size:15px; margin-left:16px; }
+  nav a:hover { color:var(--accent); }
+  h1 { font-size:clamp(1.9rem,4.5vw,2.9rem); line-height:1.15; letter-spacing:-.022em; margin:56px 0 16px; }
+  h1 span { color:var(--accent); }
+  .lede { font-size:1.16rem; color:var(--muted); max-width:44ch; margin:0 0 28px; }
+  .cta { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .btn { display:inline-block; padding:11px 18px; border-radius:9px; text-decoration:none; font-weight:600; font-size:15px;
+         border:1px solid var(--border); color:var(--fg); background:var(--card); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { filter:brightness(1.08); }
+  pre { background:var(--code); border:1px solid var(--border); border-radius:10px; padding:14px 16px; overflow-x:auto;
+        font:13.5px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+  code { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:.92em; }
+  section { padding:52px 0; border-top:1px solid var(--border); }
+  h2 { font-size:1.5rem; letter-spacing:-.015em; margin:0 0 18px; }
+  h3 { font-size:1.02rem; margin:0 0 6px; }
+  p { margin:0 0 14px; }
+  .muted { color:var(--muted); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+  .card p { margin:0; color:var(--muted); font-size:.94rem; }
+  figure { margin:0; }
+  figure img { width:100%; height:auto; border:1px solid var(--border); border-radius:12px; display:block; }
+  figcaption { color:var(--muted); font-size:.88rem; margin-top:10px; }
+  ol.steps { padding-left:20px; }
+  ol.steps li { margin-bottom:10px; }
+  details { border-bottom:1px solid var(--border); padding:14px 0; }
+  details summary { cursor:pointer; font-weight:600; }
+  details p { margin:10px 0 0; color:var(--muted); }
+  footer { padding:36px 0 56px; color:var(--muted); font-size:.9rem; border-top:1px solid var(--border); }
+  footer a { color:var(--accent); text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <nav>
+      <span class="brand">gchat-archive</span>
+      <span>
+        <a href="https://github.com/tunguyenatwork/gchat-archive">GitHub</a>
+        <a href="https://pypi.org/project/gchat-archive/">PyPI</a>
+        <a href="https://github.com/tunguyenatwork/gchat-archive#install">Docs</a>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Export and search your <span>Google Chat history</span>, offline</h1>
+  <p class="lede">Every space, group chat and DM in a local SQLite archive with instant full-text
+    search — including messages that Google Takeout refuses to export.</p>
+
+  <div class="cta">
+    <a class="btn primary" href="https://pypi.org/project/gchat-archive/">Install from PyPI</a>
+    <a class="btn" href="https://github.com/tunguyenatwork/gchat-archive">View source</a>
+  </div>
+
+  <pre><code>pipx install "gchat-archive[text]"
+gchat-archive serve</code></pre>
+
+  <section>
+    <figure>
+      <img src="images/app.png" width="783" height="707"
+           alt="The archive UI: conversation list, search box, category and date filters, and an open thread">
+      <figcaption>Browse every conversation, filter by category or date, search the full text.
+        Message bodies are blurred in this screenshot; they are real conversations.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Google Chat has no export button. Takeout is not the answer.</h2>
+    <p>Google's own help centre is explicit: with Takeout, <em>"group messages and spaces created by
+      users with a work or school account won't export as part of your Chat history."</em> Those are
+      the conversations you actually need to keep. And what Takeout does give you is a zip of JSON —
+      openable, but not searchable.</p>
+    <p><strong>gchat-archive reads the Google Chat API directly</strong>, with your own OAuth client, so it
+      sees every space you are a member of — work accounts included — and keeps it queryable.</p>
+  </section>
+
+  <section>
+    <h2>What you get</h2>
+    <div class="grid">
+      <div class="card"><h3>Every message</h3><p>Incremental sync that resumes where it stopped, across accounts.</p></div>
+      <div class="card"><h3>Full-text search</h3><p>Messages, sender names, and the text inside PDFs, DOCX, XLSX, CSVs and Google Docs.</p></div>
+      <div class="card"><h3>Works offline</h3><p>A local web UI on 127.0.0.1: no internet needed to read your own history.</p></div>
+      <div class="card"><h3>Nightly sync</h3><p>A scheduled job keeps the archive current, or run it by hand from the UI.</p></div>
+      <div class="card"><h3>Backup &amp; restore</h3><p>One .tar.gz moves the whole archive — messages, accounts, settings — to a new machine.</p></div>
+      <div class="card"><h3>Nothing leaves your machine</h3><p>No server, no telemetry, no account. Optional password on the UI.</p></div>
+      <div class="card"><h3>Multi-account</h3><p>Personal and work Google accounts, each with its own isolated archive.</p></div>
+      <div class="card"><h3>Prune locally</h3><p>Hide or delete conversations from your copy. Google Chat itself is never modified.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How it works</h2>
+    <ol class="steps">
+      <li><strong>Install</strong> — <code>pipx install "gchat-archive[text]"</code> on macOS, Windows or Linux (Python 3.10+).</li>
+      <li><strong>Create an OAuth client</strong> — five minutes in Google Cloud Console; the setup page walks you through it and accepts the <code>client_secret.json</code> by drag and drop.</li>
+      <li><strong>Sign in and sync</strong> — the first sync pulls your whole history, later ones only fetch what is new.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Questions</h2>
+
+    <details open><summary>How do I export my Google Chat history?</summary>
+      <p>Install gchat-archive, upload an OAuth client on the setup page, sign in, and run a sync.
+        You get a SQLite database plus a browsable UI. For a personal account Google Takeout also
+        works; for work and school accounts it does not export spaces at all.</p></details>
+
+    <details><summary>Does Google Takeout include work or school Chat spaces?</summary>
+      <p>No. Google documents that group messages and spaces created by work or school accounts are
+        excluded from the export. gchat-archive uses the Chat API instead, so those spaces are included.</p></details>
+
+    <details><summary>Can I search my Google Chat history offline?</summary>
+      <p>Yes. Messages are indexed with SQLite FTS5, so search is local and instant — including the
+        text inside attached documents. No internet connection is needed to read the archive.</p></details>
+
+    <details><summary>Where is the archive stored, and is it private?</summary>
+      <p>Under your home directory (<code>~/.gchat-archive</code>), readable only by you. The web UI
+        listens on <code>127.0.0.1</code> and nothing is uploaded anywhere.</p></details>
+
+    <details><summary>Can I use more than one Google account?</summary>
+      <p>Yes — add each account in Settings; every account gets its own isolated archive and you can
+        search across all of them at once.</p></details>
+
+    <details><summary>Can I move the archive to another computer?</summary>
+      <p>Yes. Export a backup from Settings and restore it on the new machine; accounts, settings and
+        the database come with it.</p></details>
+
+    <details><summary>Does it delete anything from Google Chat?</summary>
+      <p>No. Excluding or deleting a conversation affects only your local copy. The app never calls a
+        write endpoint on Google Chat.</p></details>
+
+    <details><summary>What does it cost?</summary>
+      <p>Nothing. MIT licensed, source on <a href="https://github.com/tunguyenatwork/gchat-archive">GitHub</a>.</p></details>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>gchat-archive — MIT · <a href="https://github.com/tunguyenatwork/gchat-archive">source</a> ·
+     <a href="https://pypi.org/project/gchat-archive/">PyPI</a> ·
+     <a href="https://github.com/tunguyenatwork/gchat-archive/blob/main/docs/INSTALL.md">install guide</a></p>
+  <p>Not affiliated with Google. Google Chat is a trademark of Google LLC.</p>
+</footer>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "gchat-archive",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "macOS, Windows, Linux",
+  "description": "Export every Google Chat space, group chat and direct message to a local SQLite archive with full-text search. Works with work and school accounts that Google Takeout excludes.",
+  "url": "https://tunguyenatwork.github.io/gchat-archive/",
+  "downloadUrl": "https://pypi.org/project/gchat-archive/",
+  "codeRepository": "https://github.com/tunguyenatwork/gchat-archive",
+  "softwareVersion": "0.2.3",
+  "license": "https://github.com/tunguyenatwork/gchat-archive/blob/main/LICENSE",
+  "programmingLanguage": "Python",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "How do I export my Google Chat history?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Install gchat-archive, upload an OAuth client on the setup page, sign in, and run a sync. You get a SQLite database plus a browsable UI. Google Takeout works for personal accounts, but not for work or school spaces." } },
+    { "@type": "Question", "name": "Does Google Takeout include work or school Chat spaces?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Google documents that group messages and spaces created by work or school accounts are excluded from the export. gchat-archive uses the Chat API instead, so those spaces are included." } },
+    { "@type": "Question", "name": "Can I search my Google Chat history offline?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Messages are indexed with SQLite FTS5, so search is local and instant, including text extracted from attached PDFs, DOCX, XLSX and Google Docs. No internet connection is needed to read the archive." } },
+    { "@type": "Question", "name": "Where is the archive stored, and is it private?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Under your home directory in ~/.gchat-archive, readable only by you. The web UI listens on 127.0.0.1 and nothing is uploaded anywhere." } },
+    { "@type": "Question", "name": "Can I use more than one Google account?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. Add each account in Settings; every account gets its own isolated archive and you can search across all of them at once." } },
+    { "@type": "Question", "name": "Does gchat-archive delete anything from Google Chat?",
+      "acceptedAnswer": { "@type": "Answer", "text": "No. Excluding or deleting a conversation affects only your local copy. The app never calls a write endpoint on Google Chat." } }
+  ]
+}
+</script>
+</body>
+</html>

@@ -20,7 +20,16 @@ Google Chat has no export button. This gives you one:
 - **Multi-account** — several Google accounts, each with an isolated archive
 - **Prune without losing anything upstream** — delete or exclude conversations and messages locally; Google Chat is never modified
 
-macOS · Windows · Linux.
+macOS · Windows · Linux. Project page: **[tunguyenatwork.github.io/gchat-archive](https://tunguyenatwork.github.io/gchat-archive/)**
+
+## Why not just use Google Takeout?
+
+You can — for a personal account. Takeout has two limits that make it a poor archive tool:
+
+- **Google Takeout skips work and school conversations.** Its own documentation is explicit: *"Group messages and spaces created by users with a work or school account won't export as part of your Chat history."* At work, the conversations you most want to keep are exactly the ones Takeout leaves out.
+- **The export is not searchable.** You get JSON/HTML in a zip: openable, not queryable. "Where did someone mention the migration cutover date in 2019?" means grepping hundreds of files.
+
+`gchat-archive` reads the **Google Chat API** with your own OAuth client, so it sees every space you are a member of — work accounts included — and puts it in SQLite with FTS5. Search is instant, offline, and includes the text inside attached documents.
 
 ## Screenshots
 
