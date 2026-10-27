@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gchat-archive"
-version = "0.2.2"
+version = "0.2.3"
 description = "Keep a local, searchable copy of your Google Chat history"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,7 +24,11 @@ classifiers = [
   "Topic :: Database",
 ]
 dependencies = [
+  # google-auth refreshes tokens through its `requests` transport, so requests is
+  # not optional: without it every fetch fails with "The requests library is not
+  # installed" the moment a sync starts.
   "google-auth>=2.0,<3",
+  "requests>=2.28",
 ]
 
 [project.optional-dependencies]

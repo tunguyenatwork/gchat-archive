@@ -16,6 +16,7 @@ import mimetypes
 import re
 import shutil
 import socket
+import subprocess
 import sqlite3
 import sys
 import threading
@@ -34,6 +35,7 @@ from . import backup
 from . import paths
 from . import schedule
 from . import service
+from . import syncjob
 
 def ARCHIVE() -> Path:  # noqa: N802 - kept call-compatible with the old constant
     """Root of the active account's archive (resolved per call)."""
@@ -377,6 +379,59 @@ def parse_client_secret(data) -> dict:
     return client
 
 
+_SYNC = {
+    "proc": None,
+    "started_at": 0.0,
+    "finished_at": 0.0,
+    "returncode": None,
+    "lock": threading.Lock(),
+}
+
+
+def sync_command(mode: str = "normal") -> list[str]:
+    """The argv a manual sync runs (overridable so tests need no network)."""
+    override = os.environ.get("GCHAT_SYNC_COMMAND")
+    if override:
+        return override.split()
+    argv = [sys.executable, "-m", "gchat_archive"]
+    default_home = Path.home() / (".%s" % "gchat-archive")
+    if paths.data_home() != default_home:
+        argv += ["--data-dir", str(paths.data_home())]
+    argv.append("sync")
+    if mode == "check-all":
+        argv.append("--check-all")
+    return argv
+
+
+def sync_status() -> dict:
+    """State of the current/last manual sync, for the UI button."""
+    state = _SYNC
+    running = state["proc"] is not None and state["proc"].poll() is None
+    log = paths.data_home() / "sync.log"
+    tail: list[str] = []
+    if log.exists():
+        try:
+            tail = log.read_text(errors="replace").splitlines()[-6:]
+        except OSError:
+            tail = []
+    last: dict = {}
+    try:
+        last = json.loads((paths.data_home() / "last_sync.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        last = {}
+    return {
+        "running": running,
+        "started_at": state["started_at"],
+        "finished_at": state["finished_at"],
+        "returncode": state["returncode"],
+        "seconds": (time.time() - state["started_at"]) if running and state["started_at"] else 0,
+        "tail": tail,
+        "last_run_at": last.get("at"),
+        "last_ok": last.get("ok"),
+        "last_detail": last.get("detail") or "",
+    }
+
+
 _BACKUP_SIZES = {"at": 0.0, "data": {}}
 
 
@@ -599,6 +654,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_backup_download()
         if path == "/api/service/status":
             return self._json(service.status())
+        if path == "/api/sync/status":
+            return self._json(syncjob.JOB.status())
+        if path == "/api/sync/status":
+            return self._json(sync_status())
 
         con = connect()
         try:
@@ -671,6 +730,12 @@ class Handler(BaseHTTPRequestHandler):
             return self.api_client_secret(body)
         if path == "/api/backup/restore-confirm":
             return self.api_backup_confirm()
+        if path == "/api/sync/start":
+            return self.api_sync_start(body)
+        if path == "/api/sync/start":
+            return self.api_sync_start()
+        if path == "/api/sync/stop":
+            return self.api_sync_stop()
         if path == "/api/service/install":
             return self.api_service("install")
         if path == "/api/service/uninstall":
@@ -733,9 +798,63 @@ class Handler(BaseHTTPRequestHandler):
                 "client_secret": client_secret_status(),
                 "backup_sizes": backup_sizes(),
                 "service": service.status(),
+                "sync": syncjob.JOB.status(),
                 "port": self.server.server_port,
             }
         )
+
+    def api_sync_start(self, body):
+        """Start a one-off sync in the background; the UI polls /api/sync/status.
+
+        A sync runs for minutes, so nothing happens inline — the response comes
+        back as soon as the child process is alive.
+        """
+        state = _SYNC
+        if state["proc"] is not None and state["proc"].poll() is None:
+            return self._json({"ok": False, "error": "a sync is already running",
+                               "status": sync_status()}, 409)
+
+        mode = "check-all" if body.get("mode") == "check-all" else "normal"
+        log = paths.data_home() / "sync.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ, GCHAT_ARCHIVE_HOME=str(paths.data_home()), PYTHONUNBUFFERED="1")
+        argv = sync_command(mode)
+        try:
+            handle = open(log, "w")
+            proc = subprocess.Popen(argv, stdout=handle, stderr=subprocess.STDOUT, env=env)
+        except OSError as exc:
+            return self._json({"error": "could not start the sync: %s" % exc}, 500)
+
+        state.update({"proc": proc, "started_at": time.time(), "finished_at": 0.0,
+                      "returncode": None})
+
+        def collect(process=proc, stream=handle):
+            code = process.wait()
+            stream.close()
+            state["finished_at"] = time.time()
+            state["returncode"] = code
+            try:
+                schedule.record_run(code == 0,
+                                    "sync from the web UI" if code == 0
+                                    else "sync exited with code %d" % code)
+            except Exception:
+                pass
+
+        threading.Thread(target=collect, daemon=True).start()
+        return self._json({"ok": True, "mode": mode, "command": " ".join(argv),
+                           "status": sync_status()})
+
+    def api_sync_start(self):
+        """Kick off a one-off sync; the UI polls /api/sync/status while it runs."""
+        mode = (self.server.query.get("mode") or [""])[0]
+        ok, detail = syncjob.JOB.start(mode="check-all" if mode == "check-all" else None)
+        if not ok:
+            return self._json({"ok": False, "error": detail, "status": syncjob.JOB.status()}, 409)
+        return self._json({"ok": True, "status": syncjob.JOB.status()})
+
+    def api_sync_stop(self):
+        stopped = syncjob.JOB.stop()
+        return self._json({"ok": True, "stopped": stopped, "status": syncjob.JOB.status()})
 
     def api_service(self, action):
         """Install or remove the login service for this install."""

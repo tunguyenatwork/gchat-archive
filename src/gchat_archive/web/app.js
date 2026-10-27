@@ -55,6 +55,8 @@
     navToggle: $("#nav-toggle"),
     scrim: $("#scrim"),
     settingsBtn: $("#settings-btn"),
+    syncNow: $("#sync-now"),
+    syncState: $("#sync-state"),
     accountFilter: $("#account-filter"),
   };
 
@@ -272,6 +274,60 @@
       `<div>indexed ${esc(m.built_at || "?")} · ${((m.db_bytes || 0) / 1e6).toFixed(1)} MB</div>`;
     el.acct.textContent = m.me ? `${m.me} · offline` : "offline";
   }
+
+
+  // ---------- one-off sync (sidebar button) ----------
+  let syncPoll = null;
+
+  function renderSync(status) {
+    const s = status || {};
+    el.syncNow.disabled = !!s.running;
+    el.syncNow.textContent = s.running ? "Syncing…" : "Sync now";
+    if (s.running) {
+      el.syncState.textContent = `${Math.max(1, Math.round(s.seconds || 0))}s — fetching new messages`;
+    } else if (s.state === "failed") {
+      el.syncState.textContent = `last sync failed (exit ${s.returncode})`;
+    } else if (s.state === "done") {
+      el.syncState.textContent = `synced in ${Math.round(s.seconds || 0)}s`;
+    } else {
+      el.syncState.textContent = s.last_run_at ? `last sync ${relTime(s.last_run_at)}` : "never synced here";
+    }
+  }
+
+  async function pollSync() {
+    try {
+      const status = await api("/api/sync/status");
+      renderSync(status);
+      if (status.running) {
+        if (!syncPoll) syncPoll = setInterval(pollSync, 2000);
+      } else {
+        clearInterval(syncPoll);
+        syncPoll = null;
+        refreshStats();
+      }
+    } catch {
+      clearInterval(syncPoll);
+      syncPoll = null;
+    }
+  }
+
+  async function startOneOffSync(mode) {
+    if (el.syncNow.disabled) return;
+    el.syncNow.disabled = true;
+    el.syncState.textContent = "starting…";
+    try {
+      const res = await post("/api/sync/start" + (mode === "check-all" ? "?mode=check-all" : ""), {});
+      renderSync(res.status);
+      toast(mode === "check-all" ? "Re-checking every conversation" : "Sync started");
+      pollSync();
+    } catch (err) {
+      const busy = /already running/i.test(err.message || "");
+      toast(busy ? "A sync is already running" : `Could not start sync: ${err.message}`);
+      pollSync();
+    }
+  }
+
+  if (el.syncNow) el.syncNow.addEventListener("click", () => startOneOffSync());
 
   async function refreshStats() {
     try {

@@ -1358,3 +1358,12 @@ kbd {
 .cs-dot.bad { background: var(--danger); }
 .cs-actions { display: flex; gap: 14px; margin-top: 8px; }
 .cs-actions .linkbtn { cursor: pointer; }
+
+/* --- one-off sync button (sidebar) --- */
+.syncbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 12px; border-top: 1px solid var(--line);
+}
+.syncbar button { font-size: 12px; padding: 7px 12px; border-radius: var(--radius-sm); cursor: pointer; }
+.syncbar button:disabled { opacity: .6; cursor: default; }
+.syncbar .subtle { font-size: 11px; line-height: 1.3; }
