@@ -11,6 +11,7 @@ serve`` — against this install and data directory. Installing is reversible wi
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -103,7 +104,14 @@ def _mac_status() -> dict:
 
 # --- Linux -----------------------------------------------------------------
 
+def have_systemd() -> bool:
+    """systemctl is absent in containers, WSL images and minimal CI guests."""
+    return shutil.which("systemctl") is not None
+
+
 def _linux_install(port: int) -> tuple[bool, str]:
+    if not have_systemd():
+        return False, "systemd is not available here — run the reader another way (see the README)"
     path = unit_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     env = ""
@@ -133,6 +141,8 @@ WantedBy=default.target
 
 
 def _linux_uninstall() -> tuple[bool, str]:
+    if not have_systemd():
+        return False, "systemd is not available here"
     subprocess.run(["systemctl", "--user", "disable", "--now", LINUX_UNIT],
                    capture_output=True, text=True, timeout=30)
     path = unit_path()
@@ -144,8 +154,16 @@ def _linux_uninstall() -> tuple[bool, str]:
 
 def _linux_status() -> dict:
     path = unit_path()
-    out = subprocess.run(["systemctl", "--user", "is-active", LINUX_UNIT], capture_output=True, text=True, timeout=15)
-    return {"installed": path.exists(), "running": out.stdout.strip() == "active", "detail": out.stdout.strip()}
+    if not have_systemd():
+        return {"installed": path.exists(), "running": False,
+                "detail": "systemd not available on this system", "available": False}
+    try:
+        out = subprocess.run(["systemctl", "--user", "is-active", LINUX_UNIT],
+                             capture_output=True, text=True, timeout=15)
+        detail = out.stdout.strip()
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {"installed": path.exists(), "running": False, "detail": str(exc), "available": False}
+    return {"installed": path.exists(), "running": detail == "active", "detail": detail, "available": True}
 
 
 # --- Windows ---------------------------------------------------------------
@@ -190,7 +208,8 @@ def uninstall() -> tuple[bool, str]:
 def status() -> dict:
     base = {"platform": "windows" if os.name == "nt" else ("launchd" if sys.platform == "darwin" else "systemd"),
             "path": str(unit_path()) if os.name != "nt" else WINDOWS_TASK,
-            "command": " ".join(_program(DEFAULT_PORT))}
+            "command": " ".join(_program(DEFAULT_PORT)),
+            "available": True}
     if os.name == "nt":
         base.update(_win_status())
     elif sys.platform == "darwin":
