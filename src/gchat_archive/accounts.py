@@ -60,12 +60,32 @@ def slug_for(email: str) -> str:
     return cleaned or "default"
 
 
+def _repair_token_paths(data: dict) -> bool:
+    """Point entries at this machine's copy of their token.
+
+    The registry stores an absolute path. After restoring a backup on another
+    machine, or moving the data directory, that path belongs to the old home
+    while the token itself travelled to <data>/tokens/<slug>.json — so sync would
+    report a missing token. Rewrite it when the local copy exists.
+    """
+    changed = False
+    for entry in data.get("accounts", []):
+        current = entry.get("token") or ""
+        local = TOKENS_DIR / ("%s.json" % entry.get("slug", ""))
+        if (not current or not Path(current).exists()) and local.exists():
+            entry["token"] = str(local)
+            changed = True
+    return changed
+
+
 def load() -> dict:
     _refresh_root()
     if REGISTRY.exists():
         try:
             data = json.loads(REGISTRY.read_text())
             if isinstance(data, dict) and isinstance(data.get("accounts"), list):
+                if _repair_token_paths(data):
+                    save(data)     # token came back with the backup: fix the path
                 return data
         except json.JSONDecodeError:
             pass
