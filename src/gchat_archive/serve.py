@@ -393,7 +393,9 @@ def sync_command(mode: str = "normal") -> list[str]:
     if override:
         import shlex
 
-        return shlex.split(override)
+        # posix=True strips backslashes, which would mangle a Windows path such
+        # as C:\Python\python.exe; Windows quoting is not POSIX quoting.
+        return shlex.split(override, posix=(os.name != "nt"))
     argv = [sys.executable, "-m", "gchat_archive"]
     default_home = Path.home() / (".%s" % "gchat-archive")
     if paths.data_home() != default_home:

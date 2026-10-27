@@ -28,7 +28,8 @@ def server(tmp_path: Path, monkeypatch):
     # Python, not `sh`: Windows runners have no POSIX shell.
     import sys
 
-    quick = "%s -c \"import time; print('fetching'); time.sleep(1); print('done')\"" % sys.executable
+    exe = sys.executable.replace("\\", "/")
+    quick = "%s -c \"import time; print('fetching'); time.sleep(1); print('done')\"" % exe
     monkeypatch.setenv("GCHAT_SYNC_COMMAND", quick)
 
     from gchat_archive import serve
